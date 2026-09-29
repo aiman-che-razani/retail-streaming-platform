@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "event_id": "0b9f6a52-2c1e-4d7b-9f3a-6e2d1c0b9a87",
+    "event_type": "pos.transaction.completed",
+    "schema_version": "1.0",
+    "event_timestamp": "2026-09-29T12:31:42Z",
+    "produced_at": "2026-09-29T12:31:42.215Z",
+    "producer": "retail-simulator/0.1.0",
+    "correlation_id": "3f1c2a9e-8b7d-4c6e-9a1f-2b3c4d5e6f70"
+  },
+  "payload": {
+    "transaction_id": "TXN-KLCC01-20260929-000123",
+    "store_id": "KLCC-01",
+    "register_id": "REG-03",
+    "customer_id": "CUST-0012345",
+    "payment_method": "CARD",
+    "currency": "MYR",
+    "line_items": [
+      {
+        "line_number": 1,
+        "product_id": "SKU-10293",
+        "quantity": 2,
+        "unit_price": 18.9,
+        "discount_amount": 0.0
+      },
+      {
+        "line_number": 2,
+        "product_id": "SKU-20011",
+        "quantity": 1,
+        "unit_price": 5.5,
+        "discount_amount": 0.5
+      }
+    ],
+    "total_amount": 42.8
+  }
+}

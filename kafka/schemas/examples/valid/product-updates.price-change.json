@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "event_id": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    "event_type": "product.updated",
+    "schema_version": "1.0",
+    "event_timestamp": "2026-09-29T01:00:00Z",
+    "produced_at": "2026-09-29T12:31:42.215Z",
+    "producer": "retail-simulator/0.1.0",
+    "correlation_id": "0f1e2d3c-4b5a-4968-a7b6-c5d4e3f2a1b0"
+  },
+  "payload": {
+    "product_id": "SKU-10293",
+    "product_name": "Teh Tarik Premium 3-in-1 (15 x 40g)",
+    "brand": "Warisan Emas",
+    "category": "Beverages",
+    "subcategory": "Instant Drinks",
+    "list_price": 18.9,
+    "unit_cost": 12.4,
+    "currency": "MYR",
+    "unit_of_measure": "PACK",
+    "is_active": true
+  }
+}

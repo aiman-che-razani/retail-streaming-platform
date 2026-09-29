@@ -1,0 +1,161 @@
+# Kafka topic declarations — SOURCE OF TRUTH.
+# The bootstrap job creates exactly these topics (the broker has auto.create.topics.enable=false).
+# Rationale for every value: docs/architecture/kafka-topology.md and ADR-003.
+#
+# Environment profiles set cluster-level durability. Locally we run ONE broker, so replication
+# cannot exceed 1; production values are declared here so the difference is explicit, not forgotten.
+profiles:
+  local:
+    replication_factor: 1
+    min_insync_replicas: 1
+  production:
+    replication_factor: 3
+    min_insync_replicas: 2   # with acks=all: tolerate 1 broker loss without losing acknowledged writes
+
+# Retention constants (ms)
+#   1 day   =   86400000
+#   3 days  =  259200000
+#   7 days  =  604800000
+#  14 days  = 1209600000
+#  30 days  = 2592000000
+
+topics:
+  # ---------------------------------------------------------------- POS
+  - name: pos.transactions
+    role: primary
+    owner: simulator            # only writer
+    key: store_id
+    value_schema: pos-transactions.schema.json
+    partitions: 6
+    config:
+      cleanup.policy: delete
+      retention.ms: 604800000           # 7 days operational replay window; RAW in Snowflake is the long-term record
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576        # 1 MiB; a 200-line basket is ~25 KiB
+  - name: pos.transactions.retry
+    role: retry
+    owner: dlq-redrive
+    key: store_id
+    value_schema: pos-transactions.schema.json
+    partitions: 3
+    config:
+      cleanup.policy: delete
+      retention.ms: 259200000           # 3 days: redrives are processed within minutes
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: pos.transactions.dlq
+    role: dlq
+    owner: spark-ingest
+    key: store_id                       # original key preserved
+    value_schema: null                  # raw original bytes; may not match any schema by definition
+    partitions: 3
+    config:
+      cleanup.policy: delete
+      retention.ms: 1209600000          # 14 days: time for a human to investigate and redrive
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+
+  # ---------------------------------------------------------------- Inventory
+  - name: inventory.events
+    role: primary
+    owner: simulator
+    key: store_id:product_id            # per-SKU-location ordering keeps quantity_on_hand_after monotonic in sequence
+    value_schema: inventory-events.schema.json
+    partitions: 6
+    config:
+      cleanup.policy: delete
+      retention.ms: 604800000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: inventory.events.retry
+    role: retry
+    owner: dlq-redrive
+    key: store_id:product_id
+    value_schema: inventory-events.schema.json
+    partitions: 3
+    config:
+      cleanup.policy: delete
+      retention.ms: 259200000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: inventory.events.dlq
+    role: dlq
+    owner: spark-ingest
+    key: store_id:product_id
+    value_schema: null
+    partitions: 3
+    config:
+      cleanup.policy: delete
+      retention.ms: 1209600000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+
+  # ---------------------------------------------------------------- Customer
+  - name: customer.events
+    role: primary
+    owner: simulator
+    key: customer_id                    # per-customer ordering: profile versions arrive in order
+    value_schema: customer-events.schema.json
+    partitions: 3
+    config:
+      cleanup.policy: delete
+      retention.ms: 2592000000          # 30 days: low volume, useful for rebuilding dimensions without Snowflake
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: customer.events.retry
+    role: retry
+    owner: dlq-redrive
+    key: customer_id
+    value_schema: customer-events.schema.json
+    partitions: 1
+    config:
+      cleanup.policy: delete
+      retention.ms: 259200000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: customer.events.dlq
+    role: dlq
+    owner: spark-ingest
+    key: customer_id
+    value_schema: null
+    partitions: 1
+    config:
+      cleanup.policy: delete
+      retention.ms: 1209600000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+
+  # ---------------------------------------------------------------- Product
+  - name: product.updates
+    role: primary
+    owner: simulator
+    key: product_id                     # per-product ordering: SCD2 versions arrive in order
+    value_schema: product-updates.schema.json
+    partitions: 3
+    config:
+      cleanup.policy: delete            # NOT compact: compaction keeps only the latest version and destroys SCD2 history
+      retention.ms: 2592000000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: product.updates.retry
+    role: retry
+    owner: dlq-redrive
+    key: product_id
+    value_schema: product-updates.schema.json
+    partitions: 1
+    config:
+      cleanup.policy: delete
+      retention.ms: 259200000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576
+  - name: product.updates.dlq
+    role: dlq
+    owner: spark-ingest
+    key: product_id
+    value_schema: null
+    partitions: 1
+    config:
+      cleanup.policy: delete
+      retention.ms: 1209600000
+      message.timestamp.type: CreateTime
+      max.message.bytes: 1048576

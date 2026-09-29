@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "event_id": "9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d",
+    "event_type": "customer.profile_updated",
+    "schema_version": "1.0",
+    "event_timestamp": "2026-09-29T09:15:00Z",
+    "produced_at": "2026-09-29T12:31:42.215Z",
+    "producer": "retail-simulator/0.1.0",
+    "correlation_id": "6e5d4c3b-2a19-4f8e-b7d6-c5b4a3928170"
+  },
+  "payload": {
+    "customer_id": "CUST-0012345",
+    "loyalty_tier": "GOLD",
+    "home_store_id": "KLCC-01",
+    "city": "Kuala Lumpur",
+    "state": "Wilayah Persekutuan Kuala Lumpur",
+    "signup_date": "2024-03-17",
+    "birth_year": 1988,
+    "email_sha256": "b4c9a289323b21a01c3e940f150eb9b8c542587f1abfd8f0e1cc1ffc5e475514",
+    "marketing_opt_in": true
+  }
+}

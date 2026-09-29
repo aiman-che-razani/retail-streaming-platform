@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "event_id": "5d2e8f14-7a3b-4c9d-8e1f-0a2b3c4d5e6f",
+    "event_type": "inventory.movement.recorded",
+    "schema_version": "1.0",
+    "event_timestamp": "2026-09-29T12:31:42Z",
+    "produced_at": "2026-09-29T12:31:42.215Z",
+    "producer": "retail-simulator/0.1.0",
+    "correlation_id": "3f1c2a9e-8b7d-4c6e-9a1f-2b3c4d5e6f70",
+    "causation_id": "0b9f6a52-2c1e-4d7b-9f3a-6e2d1c0b9a87"
+  },
+  "payload": {
+    "movement_id": "MOV-KLCC01-20260929-004512",
+    "store_id": "KLCC-01",
+    "product_id": "SKU-10293",
+    "movement_type": "RECEIPT",
+    "quantity_delta": -2,
+    "quantity_on_hand_after": 46,
+    "reason_code": "REPLENISHMENT",
+    "reference_id": "PO-KLCC01-000981",
+    "unit_cost": null
+  }
+}

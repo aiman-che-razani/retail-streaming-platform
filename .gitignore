@@ -1,0 +1,41 @@
+# --- Secrets (never commit) ---
+.env
+.env.*
+!.env.example
+*.p8
+*.pem
+*.key
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# --- Runtime data (landing zone, checkpoints, archives) ---
+data/
+checkpoints/
+spark-warehouse/
+metastore_db/
+derby.log
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# --- Claude Code local settings ---
+.claude/settings.local.json

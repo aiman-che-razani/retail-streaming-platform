@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:retail-platform:schema:customer.events:1",
+  "title": "CustomerProfileChanged",
+  "description": "Full current state of a loyalty customer after registration or a profile change. Topic: customer.events. Key: customer_id. Contains no direct PII.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "payload"],
+  "properties": {
+    "metadata": {
+      "allOf": [
+        { "$ref": "#/definitions/metadata" },
+        { "properties": { "event_type": { "enum": ["customer.registered", "customer.profile_updated"] } } }
+      ]
+    },
+    "payload": { "$ref": "#/definitions/payload" }
+  },
+  "definitions": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_type", "schema_version", "event_timestamp", "produced_at", "producer", "correlation_id"],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", "description": "Globally unique event identifier; the platform-wide deduplication key." },
+        "event_type": { "type": "string", "pattern": "^[a-z]+(\\.[a-z_]+)+$" },
+        "schema_version": { "type": "string", "pattern": "^1\\.[0-9]+$", "description": "Contract version MAJOR.MINOR; major pinned to 1 by this schema." },
+        "event_timestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$", "description": "Event time (UTC): when the business fact happened." },
+        "produced_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$", "description": "When the producer serialized the event (UTC)." },
+        "producer": { "type": "string", "pattern": "^[a-z0-9-]{1,50}/[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "correlation_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "causation_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customer_id", "loyalty_tier", "home_store_id", "city", "state", "signup_date", "birth_year", "email_sha256", "marketing_opt_in"],
+      "properties": {
+        "customer_id": { "type": "string", "pattern": "^CUST-[0-9]{7}$" },
+        "loyalty_tier": { "type": "string", "enum": ["BASIC", "SILVER", "GOLD", "PLATINUM"] },
+        "home_store_id": { "type": "string", "pattern": "^[A-Z]{2,6}-[0-9]{2}$" },
+        "city": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "state": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "signup_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "birth_year": { "type": ["integer", "null"], "minimum": 1900, "maximum": 2015 },
+        "email_sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "marketing_opt_in": { "type": "boolean" }
+      }
+    }
+  }
+}
