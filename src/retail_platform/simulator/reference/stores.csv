@@ -1,0 +1,31 @@
+store_id,store_name,city,state,region,store_format,size_sqm,opened_date,timezone,traffic_weight
+KLCC-01,KedaiKita KLCC,Kuala Lumpur,Wilayah Persekutuan Kuala Lumpur,Central,FLAGSHIP,1800,2015-03-14,Asia/Kuala_Lumpur,3.0
+PAV-01,KedaiKita Pavilion,Kuala Lumpur,Wilayah Persekutuan Kuala Lumpur,Central,FLAGSHIP,1650,2016-08-02,Asia/Kuala_Lumpur,2.8
+MVAL-01,KedaiKita Mid Valley,Kuala Lumpur,Wilayah Persekutuan Kuala Lumpur,Central,MALL,1400,2014-11-20,Asia/Kuala_Lumpur,2.5
+CHR-01,KedaiKita Cheras,Kuala Lumpur,Wilayah Persekutuan Kuala Lumpur,Central,NEIGHBOURHOOD,650,2018-05-09,Asia/Kuala_Lumpur,1.2
+AMP-01,KedaiKita Ampang,Ampang,Selangor,Central,NEIGHBOURHOOD,600,2019-01-15,Asia/Kuala_Lumpur,1.1
+SUNW-01,KedaiKita Sunway Pyramid,Subang Jaya,Selangor,Central,MALL,1300,2016-02-27,Asia/Kuala_Lumpur,2.2
+SBG-01,KedaiKita SS15 Subang,Subang Jaya,Selangor,Central,EXPRESS,280,2021-07-01,Asia/Kuala_Lumpur,0.9
+PJ-01,KedaiKita Petaling Jaya,Petaling Jaya,Selangor,Central,MALL,1100,2015-09-10,Asia/Kuala_Lumpur,1.9
+SA-01,KedaiKita Shah Alam,Shah Alam,Selangor,Central,MALL,1000,2017-04-18,Asia/Kuala_Lumpur,1.6
+KLG-01,KedaiKita Klang,Klang,Selangor,Central,NEIGHBOURHOOD,700,2018-10-05,Asia/Kuala_Lumpur,1.0
+RWG-01,KedaiKita Rawang,Rawang,Selangor,Central,NEIGHBOURHOOD,550,2020-03-12,Asia/Kuala_Lumpur,0.8
+CYB-01,KedaiKita Cyberjaya,Cyberjaya,Selangor,Central,EXPRESS,300,2021-11-22,Asia/Kuala_Lumpur,0.7
+PUT-01,KedaiKita Putrajaya,Putrajaya,Wilayah Persekutuan Putrajaya,Central,MALL,900,2017-12-01,Asia/Kuala_Lumpur,1.0
+NLS-01,KedaiKita Nilai,Nilai,Negeri Sembilan,Southern,NEIGHBOURHOOD,500,2020-08-19,Asia/Kuala_Lumpur,0.6
+SRB-01,KedaiKita Seremban,Seremban,Negeri Sembilan,Southern,MALL,950,2016-06-06,Asia/Kuala_Lumpur,1.1
+MLK-01,KedaiKita Melaka,Melaka,Melaka,Southern,MALL,1000,2015-12-12,Asia/Kuala_Lumpur,1.3
+JB-01,KedaiKita Johor Bahru City,Johor Bahru,Johor,Southern,FLAGSHIP,1500,2015-05-20,Asia/Kuala_Lumpur,2.4
+JB-02,KedaiKita Skudai,Johor Bahru,Johor,Southern,NEIGHBOURHOOD,650,2019-09-09,Asia/Kuala_Lumpur,1.0
+IPH-01,KedaiKita Ipoh,Ipoh,Perak,Northern,MALL,1000,2016-10-30,Asia/Kuala_Lumpur,1.2
+PNG-01,KedaiKita Georgetown,George Town,Pulau Pinang,Northern,FLAGSHIP,1400,2015-07-25,Asia/Kuala_Lumpur,2.0
+PNG-02,KedaiKita Bayan Lepas,Bayan Lepas,Pulau Pinang,Northern,NEIGHBOURHOOD,600,2019-04-04,Asia/Kuala_Lumpur,0.9
+BTW-01,KedaiKita Butterworth,Butterworth,Pulau Pinang,Northern,NEIGHBOURHOOD,550,2020-01-20,Asia/Kuala_Lumpur,0.8
+AST-01,KedaiKita Alor Setar,Alor Setar,Kedah,Northern,MALL,800,2018-02-14,Asia/Kuala_Lumpur,0.8
+KTN-01,KedaiKita Kuantan,Kuantan,Pahang,East Coast,MALL,900,2017-08-08,Asia/Kuala_Lumpur,0.9
+KT-01,KedaiKita Kuala Terengganu,Kuala Terengganu,Terengganu,East Coast,NEIGHBOURHOOD,600,2019-06-17,Asia/Kuala_Lumpur,0.6
+KB-01,KedaiKita Kota Bharu,Kota Bharu,Kelantan,East Coast,NEIGHBOURHOOD,650,2018-12-03,Asia/Kuala_Lumpur,0.7
+KK-01,KedaiKita Kota Kinabalu,Kota Kinabalu,Sabah,East Malaysia,MALL,1100,2016-04-11,Asia/Kuala_Lumpur,1.3
+SDK-01,KedaiKita Sandakan,Sandakan,Sabah,East Malaysia,EXPRESS,320,2022-02-28,Asia/Kuala_Lumpur,0.5
+KCH-01,KedaiKita Kuching,Kuching,Sarawak,East Malaysia,MALL,1050,2016-09-19,Asia/Kuala_Lumpur,1.2
+MRI-01,KedaiKita Miri,Miri,Sarawak,East Malaysia,NEIGHBOURHOOD,550,2020-10-10,Asia/Kuala_Lumpur,0.6

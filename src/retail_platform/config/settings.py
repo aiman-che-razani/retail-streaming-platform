@@ -89,6 +89,10 @@ class SimulatorSettings(BaseSettings):
     mode: SimulatorMode = SimulatorMode.REALTIME
     transactions_per_second: float = Field(default=20.0, gt=0, le=5_000)
     backfill_days: int = Field(default=7, ge=1, le=365)
+    backfill_transactions_per_store_per_day: int = Field(default=300, ge=1, le=100_000)
+    bootstrap_master_data: bool = Field(
+        default=True, description="emit product/customer master data + opening stock at start"
+    )
     product_count: int = Field(default=500, ge=10, le=10_000)
     customer_count: int = Field(default=20_000, ge=10, le=1_000_000)
     guest_checkout_ratio: Probability = 0.4

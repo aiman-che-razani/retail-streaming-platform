@@ -1,0 +1,5 @@
+# The project lints with ruff (pyproject.toml). This file only aligns editors that run
+# flake8/pycodestyle by default with the same line length.
+[flake8]
+max-line-length = 100
+extend-ignore = E203, W503
