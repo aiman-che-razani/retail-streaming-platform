@@ -1,0 +1,5 @@
+# Force LF everywhere: files are mounted into Linux containers (shell scripts break with CRLF).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.parquet binary
