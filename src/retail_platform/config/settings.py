@@ -148,38 +148,55 @@ class PostgresSettings(BaseSettings):
         )
 
 
-class SnowflakeSettings(BaseSettings):
-    """Snowflake connection. Prefer key-pair auth (private_key_path) over passwords."""
+class _SnowflakeIdentity(BaseSettings):
+    """Who connects, and how. Prefer key-pair auth (private_key_path) over passwords."""
 
-    model_config = _config("SNOWFLAKE_")
-
-    account: str = ""
     user: str = ""
     password: SecretStr | None = None
     private_key_path: Path | None = None
     private_key_passphrase: SecretStr | None = None
     authenticator: str | None = None
+    role: str = ""
+    warehouse: str = "RETAIL_PIPELINE_WH"
+
+    @property
+    def has_credentials(self) -> bool:
+        return bool(self.user and (self.password or self.private_key_path or self.authenticator))
+
+    @model_validator(mode="after")
+    def _check_auth(self) -> _SnowflakeIdentity:
+        if self.user and not self.has_credentials:
+            prefix = self.model_config.get("env_prefix", "")
+            raise ConfigurationError(
+                f"Snowflake user {self.user!r} needs {prefix}PRIVATE_KEY_PATH (preferred), "
+                f"{prefix}PASSWORD or {prefix}AUTHENTICATOR"
+            )
+        return self
+
+
+class SnowflakeSettings(_SnowflakeIdentity):
+    """Account + the LOADER service identity (least privilege: INSERT into RAW only)."""
+
+    model_config = _config("SNOWFLAKE_")
+
+    account: str = ""
+    role: str = "RETAIL_LOADER"
     database: str = "RETAIL_DEV"
     schema_: str = Field(default="RAW", alias="SNOWFLAKE_SCHEMA")
-    warehouse: str = "RETAIL_PIPELINE_WH"
-    role: str = "RETAIL_LOADER"
     login_timeout_seconds: int = 30
     network_timeout_seconds: int = 120
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.account and self.user)
+        return bool(self.account and self.has_credentials)
 
-    @model_validator(mode="after")
-    def _check_auth(self) -> SnowflakeSettings:
-        if self.is_configured and not (
-            self.password or self.private_key_path or self.authenticator
-        ):
-            raise ConfigurationError(
-                "Snowflake requires SNOWFLAKE_PRIVATE_KEY_PATH (preferred), "
-                "SNOWFLAKE_PASSWORD or SNOWFLAKE_AUTHENTICATOR"
-            )
-        return self
+
+class SnowflakeAdminSettings(_SnowflakeIdentity):
+    """Human/CI identity for bootstrap and migrations (RETAIL_ADMIN, or ACCOUNTADMIN once)."""
+
+    model_config = _config("SNOWFLAKE_ADMIN_")
+
+    role: str = "RETAIL_ADMIN"
 
 
 class LoaderSettings(BaseSettings):
@@ -189,10 +206,8 @@ class LoaderSettings(BaseSettings):
     landing_dir: Path = Path("data/landing")
     archive_dir: Path = Path("data/archive")
     archive_retention_days: int = Field(default=3, ge=0)
-    stage_retention_days: int = Field(default=7, ge=1)
     max_batches_per_cycle: int = Field(default=500, ge=1)
     retry_attempts: int = Field(default=5, ge=1)
     retry_initial_backoff_seconds: float = Field(default=2.0, gt=0)
     retry_max_backoff_seconds: float = Field(default=120.0, gt=0)
-    reference_dir: Path | None = None
     metrics_port: int = 8001

@@ -13,9 +13,9 @@ Spark produces a continuous flow of validated events. Snowflake compute is bille
 1. **Landing zone.** Spark ingest writes each micro-batch as Parquet to `data/landing/<dataset>/query_id=<id>/batch_id=<n>/` with a `_SUCCESS` marker (layout in `overview.md`). Locally this is a bind-mounted directory; in production it would be object storage (S3/GCS/ADLS).
 2. **Loader service** (Python, every `LOADER_INTERVAL_SECONDS`, default 900):
    1. find completed batch directories (`_SUCCESS` present) not yet archived;
-   2. `PUT` their files to the internal named stage `@RAW.LANDING_STAGE/<dataset>/<query_id>/<batch_id>/` (`AUTO_COMPRESS=FALSE` for Parquet, `OVERWRITE=FALSE`);
+   2. `PUT` their files to the internal named stage `@RAW.LANDING_STAGE/<dataset>/query_id=<id>/batch_id=<n>/` (`AUTO_COMPRESS=FALSE` for Parquet; `OVERWRITE=TRUE`, because COPY load metadata, not the stage, prevents double loading);
    3. `COPY INTO RAW.<table> … FILE_FORMAT=(TYPE=PARQUET) MATCH_BY_COLUMN_NAME=CASE_INSENSITIVE`, plus load metadata columns (`METADATA$FILENAME`, `METADATA$FILE_ROW_NUMBER`, load timestamp) and `PARSE_JSON(event_json)` into the `EVENT` VARIANT. `ON_ERROR = ABORT_STATEMENT`: a file that doesn't load is a bug, not something to skip;
-   4. verify `rows_loaded` from the COPY result against the batch audit; on success move the directory to `data/archive/`; `REMOVE` staged files older than 7 days.
+   4. verify every file's COPY status (`LOADED`, no errors); `PURGE = TRUE` removes loaded files from the stage; on success move the local directory to `data/archive/` (deleted after `LOADER_ARCHIVE_RETENTION_DAYS`). Row-level completeness is reconciled against `RAW.INGEST_BATCH_AUDIT` (DQ rule SF-005).
    - Store reference CSV → `RAW.STORE_REFERENCE` (same mechanism, loaded when the file checksum changes).
 3. **In-warehouse transformation with Streams + Tasks** (see `data-model.md` §5). Append-only streams on RAW tables; a task graph scheduled every 15 min with `WHEN SYSTEM$STREAM_HAS_DATA(...)`; stored procedures for multi-statement transactional units (stream consumption + SCD2 + re-keying).
 4. **Deployment of Snowflake objects** by a small Python migration runner: `ddl/` (bootstrap, ACCOUNTADMIN, idempotent), `migrations/V###__*.sql` (applied once, checksummed, recorded in `OPS.SCHEMA_MIGRATIONS`), `transformations/R__*.sql` (re-applied when the checksum changes).
@@ -43,4 +43,4 @@ Spark produces a continuous flow of validated events. Snowflake compute is bille
 - Freshness is bounded by loader and task intervals (≈ 15–35 min by default).
 - Many small files (one per batch per dataset). COPY handles them, but per-file overhead grows. Production would use longer triggers or compaction to reach ~100–250 MB files.
 - The loader is custom code to maintain, and is well-tested because of that.
-- COPY load metadata expires after 64 days. Re-copying files older than that could duplicate RAW rows (still removed by MERGE downstream). Staged files are removed after 7 days, which prevents it in practice.
+- COPY load metadata expires after 64 days. Re-loading a file older than that would duplicate RAW rows (still removed by MERGE downstream). `PURGE = TRUE` removes files from the stage as soon as they load, and local copies are archived, so this doesn't happen in practice.

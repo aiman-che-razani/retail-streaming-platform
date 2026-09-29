@@ -6,6 +6,7 @@ from retail_platform.config.settings import (
     LoggingSettings,
     PostgresSettings,
     SimulatorSettings,
+    SnowflakeAdminSettings,
     SnowflakeSettings,
     SparkSettings,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "LoggingSettings",
     "PostgresSettings",
     "SimulatorSettings",
+    "SnowflakeAdminSettings",
     "SnowflakeSettings",
     "SparkSettings",
 ]

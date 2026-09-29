@@ -42,7 +42,8 @@ def landing_events(df: DataFrame, query_id: str, batch_id: int) -> DataFrame:
         F.col("metadata.correlation_id").alias("correlation_id"),
         F.col("metadata.causation_id").alias("causation_id"),
         F.col("body").alias("event_json"),
-        F.col("dq_warnings"),
+        # JSON text, not a Parquet LIST: nested-list encodings differ between engines.
+        F.to_json("dq_warnings").alias("dq_warnings"),
         iso(F.current_timestamp()).alias("ingested_at"),
         F.lit(query_id).alias("spark_query_id"),
         F.lit(batch_id).cast("long").alias("spark_batch_id"),

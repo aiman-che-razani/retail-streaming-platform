@@ -187,7 +187,7 @@ data/archive/<same layout>                loaded batches (deleted after LANDING_
 | `schema_id` | int | Confluent wire-format header |
 | `event_id`, `event_type`, `schema_version`, `event_timestamp`, `produced_at`, `producer`, `correlation_id`, `causation_id` | typed | envelope `metadata` |
 | `event_json` | string | the complete envelope JSON exactly as received (becomes `VARIANT` in RAW) |
-| `dq_warnings` | array<string> | IDs of WARN-severity rules the record violated |
+| `dq_warnings` | string (JSON array) | IDs of WARN-severity rules the record violated, e.g. `["POS-008"]` |
 | `ingested_at` | timestamp | Spark processing time |
 | `spark_query_id`, `spark_batch_id` | string, long | lineage |
 

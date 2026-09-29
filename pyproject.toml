@@ -73,6 +73,8 @@ ignore = [
 "tests/**" = ["S101", "PLR0915", "S105", "S106", "PLC0415"]
 # Entry points import heavy client libraries lazily, after logging is configured.
 "src/retail_platform/cli/*" = ["PLC0415"]
+# snowflake-connector / cryptography are optional extras (not in the Spark image): import lazily.
+"src/retail_platform/warehouse/connection.py" = ["PLC0415"]
 
 # ------------------------------------------------------------------ mypy
 [tool.mypy]
