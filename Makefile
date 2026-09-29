@@ -14,7 +14,7 @@ env: ## Create .env from the template if missing
 	@test -f .env || (cp .env.example .env && echo "Created .env - edit the CHANGE_ME values")
 
 install: ## Create the host virtualenv (uv) with dev tools
-	$(UV) sync --python 3.12 --extra snowflake
+	$(UV) sync --python 3.12 --extra snowflake --extra spark
 
 build: ## Build the application and Spark images
 	$(COMPOSE) --profile pipeline --profile snowflake build

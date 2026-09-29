@@ -15,7 +15,7 @@ The Spark **realtime** app upserts windowed aggregates into **PostgreSQL 17** (`
 - `realtime.store_revenue_5m (store_id, window_start, window_end, revenue, transactions, units, updated_at)`, PK (`store_id`, `window_start`);
 - `realtime.product_units_1h (product_id, window_start, window_end, units, revenue, updated_at)`, PK (`product_id`, `window_start`).
 
-Writes happen in `foreachBatch`. Each batch's updated rows are written with the Spark JDBC writer into an unlogged staging table (`realtime._stg_<table>_<batch>`). A single `INSERT … SELECT … ON CONFLICT DO UPDATE` statement then merges them with absolute values and drops the staging table, all in one transaction (ADR-007). No per-row Python. Grafana reads PostgreSQL directly for the *Real-time Sales* dashboard. A retention job deletes windows older than 7 days.
+Writes happen in `foreachBatch`. Each batch's updated rows are written with the Spark JDBC writer into a per-batch staging table (`realtime._stg_<table>_<batch>`). A single `INSERT … SELECT … ON CONFLICT DO UPDATE` statement then merges them with absolute values and drops the staging table, all in one transaction (ADR-007). No per-row Python. Grafana reads PostgreSQL directly for the *Real-time Sales* dashboard. A retention job deletes windows older than 7 days.
 
 PostgreSQL also serves as the integration-test sink for the realtime app, so its correctness can be tested in CI without Snowflake.
 

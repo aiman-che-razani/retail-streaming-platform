@@ -66,6 +66,7 @@ ignore = [
     "TRY003",   # messages on exceptions are useful context
     "S311",     # random is used for simulation, not cryptography
     "S608",     # SQL is built from validated identifiers only (see sql helpers)
+    "N812",     # `from pyspark.sql import functions as F` is the universal PySpark convention
 ]
 
 [tool.ruff.lint.per-file-ignores]
