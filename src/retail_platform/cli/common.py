@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import signal
+import sys
 import threading
 from collections.abc import Callable
 from types import FrameType
@@ -17,8 +18,9 @@ EXIT_FAILURE = 1
 EXIT_CONFIG = 2
 
 
-def init_process(service: str) -> None:
-    configure_logging(service=service, settings=LoggingSettings())
+def init_process(service: str, *, logs_to_stderr: bool = False) -> None:
+    stream = sys.stderr if logs_to_stderr else sys.stdout
+    configure_logging(service=service, settings=LoggingSettings(), stream=stream)
 
 
 def load_catalog(settings: KafkaSettings) -> TopicCatalog:
@@ -52,9 +54,9 @@ class ShutdownSignal:
         return self._event.wait(timeout)
 
 
-def run_main(service: str, body: Callable[[], int]) -> int:
+def run_main(service: str, body: Callable[[], int], *, logs_to_stderr: bool = False) -> int:
     """Process boundary: the only place a broad exception handler is allowed."""
-    init_process(service)
+    init_process(service, logs_to_stderr=logs_to_stderr)
     log = get_logger(service)
     try:
         return body()

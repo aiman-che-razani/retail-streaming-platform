@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import random
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -14,26 +13,10 @@ from retail_platform.contracts.models import (
     ReasonCode,
 )
 from retail_platform.contracts.validation import SchemaValidator
-from retail_platform.simulator.catalog import build_catalog
-from retail_platform.simulator.customers import build_customers
-from retail_platform.simulator.engine import RetailEngine
 from retail_platform.simulator.reference_data import load_stores
+from tests.factories import T0, make_engine
 
 pytestmark = pytest.mark.unit
-
-T0 = datetime(2026, 9, 29, 4, 0, tzinfo=UTC)  # 12:00 in Kuala Lumpur
-
-
-def make_engine(seed: int = 7, products: int = 40, customers: int = 200) -> RetailEngine:
-    rng = random.Random(seed)
-    stores = load_stores()
-    return RetailEngine(
-        stores=stores,
-        products=build_catalog(rng, products),
-        customers=build_customers(rng, customers, stores, T0.date()),
-        rng=rng,
-        wall_clock=lambda: T0,
-    )
 
 
 def test_thirty_stores_loaded() -> None:

@@ -16,8 +16,7 @@ from retail_platform.messaging.records import OutgoingEvent
 from retail_platform.simulator.faults import FaultInjector
 from retail_platform.simulator.reference_data import load_stores
 from retail_platform.simulator.runner import SimulationRunner, poisson
-
-from .test_engine import T0, make_engine
+from tests.factories import T0, make_engine
 
 pytestmark = pytest.mark.unit
 
