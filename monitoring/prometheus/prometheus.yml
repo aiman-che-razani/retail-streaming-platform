@@ -1,0 +1,33 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: local
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Topic/partition offsets (throughput, DLQ volume) and classic consumer-group lag.
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+
+  # Application endpoints. Targets that are not running (e.g. loader without Snowflake)
+  # simply show as DOWN; `up == 0` alerts only fire for services expected to run.
+  - job_name: simulator
+    static_configs:
+      - targets: ["simulator:8000"]
+  - job_name: loader
+    static_configs:
+      - targets: ["loader:8001"]
+  - job_name: spark-ingest
+    static_configs:
+      - targets: ["spark-ingest:8002"]
+  - job_name: spark-realtime
+    static_configs:
+      - targets: ["spark-realtime:8003"]

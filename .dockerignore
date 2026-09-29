@@ -1,0 +1,16 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+data
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+secrets
+*.p8
+*.pem

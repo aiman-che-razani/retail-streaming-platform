@@ -1,0 +1,324 @@
+# Local development environment (docs/architecture/overview.md §7).
+#
+#   docker compose up -d                          # core: Kafka, Schema Registry, init, UI, Postgres, monitoring
+#   docker compose --profile pipeline up -d       # + simulator and both Spark apps
+#   docker compose --profile snowflake up -d      # + Snowflake loader (needs SNOWFLAKE_* in .env)
+#
+# Health checks gate startup order, but clients ALSO retry with backoff: `depends_on` proves a
+# dependency was healthy once, not that it stays available.
+
+name: retail-platform
+
+x-app-env: &app-env
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  KAFKA_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  LOG_FORMAT: json
+
+x-app-build: &app-build
+  context: .
+  dockerfile: docker/app/Dockerfile
+
+x-spark-build: &spark-build
+  context: .
+  dockerfile: docker/spark/Dockerfile
+  target: runtime
+
+x-env-file: &env-file
+  - path: .env
+    required: false
+
+services:
+  # ------------------------------------------------------------------ Kafka (KRaft, single node)
+  kafka:
+    image: apache/kafka:4.3.1
+    hostname: kafka
+    ports:
+      - "9092:9092"          # host clients (EXTERNAL listener, advertised as localhost:9092)
+    environment:
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:29092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"        # topics come from topics.yaml only
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 20s
+    mem_limit: 1g
+    restart: unless-stopped
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.2.4
+    hostname: schema-registry
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC: _schemas
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward_transitive
+      SCHEMA_REGISTRY_HEAP_OPTS: -Xms256m -Xmx256m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/subjects >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    mem_limit: 512m
+    restart: unless-stopped
+
+  # One-shot: create topics from topics.yaml, register schemas (idempotent, safe to re-run).
+  kafka-init:
+    build: *app-build
+    image: retail-platform/app:local
+    env_file: *env-file
+    environment:
+      <<: *app-env
+    command: ["sh", "-c", "retail-topics ensure && retail-schemas register"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    mem_limit: 256m
+    restart: "no"
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui:v1.5.0
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      DYNAMIC_CONFIG_ENABLED: "false"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      schema-registry:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    mem_limit: 512m
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ Real-time serving store
+  postgres:
+    image: postgres:17.11-bookworm
+    ports:
+      - "${POSTGRES_HOST_PORT:-5434}:5432"   # not 5432: often taken by a local PostgreSQL install
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-retail_realtime}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-retail_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?set POSTGRES_ADMIN_PASSWORD in .env}
+      POSTGRES_SPARK_PASSWORD: ${POSTGRES_SPARK_PASSWORD:?set POSTGRES_SPARK_PASSWORD in .env}
+      POSTGRES_GRAFANA_PASSWORD: ${POSTGRES_GRAFANA_PASSWORD:?set POSTGRES_GRAFANA_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ Monitoring
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    command: ["--kafka.server=kafka:29092", "--kafka.version=3.9.0"]
+    ports:
+      - "9308:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    mem_limit: 128m
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.0.10
+    ports:
+      - "${GRAFANA_HOST_PORT:-3030}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/pipeline-overview.json
+      POSTGRES_DB: ${POSTGRES_DB:-retail_realtime}
+      POSTGRES_GRAFANA_PASSWORD: ${POSTGRES_GRAFANA_PASSWORD:?set POSTGRES_GRAFANA_PASSWORD in .env}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------ Pipeline (profile: pipeline)
+  simulator:
+    profiles: ["pipeline"]
+    build: *app-build
+    image: retail-platform/app:local
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      SIMULATOR_METRICS_PORT: 8000
+      METRICS_PORT: 8000
+    command: ["retail-simulator", "run"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck: &metrics-health
+      test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen('http://localhost:%s/metrics' % os.environ['METRICS_PORT'], timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 256m
+    restart: on-failure
+    stop_grace_period: 30s
+
+  spark-ingest:
+    profiles: ["pipeline"]
+    build: *spark-build
+    image: retail-platform/spark:local
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      SPARK_CONF_DIR: /app/spark/config
+      SPARK_METRICS_PORT: 8002
+      METRICS_PORT: 8002
+    command: ["retail-spark-ingest"]
+    ports:
+      - "4040:4040"
+      - "8002:8002"
+    volumes:
+      - pipeline-data:/app/data
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      <<: *metrics-health
+      start_period: 90s
+    mem_limit: 2g
+    restart: on-failure
+    stop_grace_period: 60s
+
+  spark-realtime:
+    profiles: ["pipeline"]
+    build: *spark-build
+    image: retail-platform/spark:local
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      SPARK_CONF_DIR: /app/spark/config
+      SPARK_METRICS_PORT: 8003
+      METRICS_PORT: 8003
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-retail_realtime}
+      POSTGRES_USER: spark_writer
+      POSTGRES_PASSWORD: ${POSTGRES_SPARK_PASSWORD:?set POSTGRES_SPARK_PASSWORD in .env}
+    command: ["retail-spark-realtime"]
+    ports:
+      - "4041:4040"
+      - "8003:8003"
+    volumes:
+      - pipeline-data:/app/data
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      <<: *metrics-health
+      start_period: 90s
+    mem_limit: 2g
+    restart: on-failure
+    stop_grace_period: 60s
+
+  # ------------------------------------------------------------------ Snowflake loader (profile: snowflake)
+  loader:
+    profiles: ["snowflake"]
+    build: *app-build
+    image: retail-platform/app:local
+    env_file: *env-file
+    environment:
+      <<: *app-env
+      LOADER_METRICS_PORT: 8001
+      METRICS_PORT: 8001
+      SNOWFLAKE_PRIVATE_KEY_PATH: ${SNOWFLAKE_PRIVATE_KEY_PATH_CONTAINER:-}
+    command: ["retail-loader", "run"]
+    ports:
+      - "8001:8001"
+    volumes:
+      - pipeline-data:/app/data
+      - ./secrets:/app/secrets:ro
+    healthcheck:
+      <<: *metrics-health
+    mem_limit: 256m
+    restart: on-failure
+    stop_grace_period: 120s
+
+volumes:
+  kafka-data:
+  postgres-data:
+  prometheus-data:
+  grafana-data:
+  pipeline-data:
