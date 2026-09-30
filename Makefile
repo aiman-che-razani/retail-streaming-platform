@@ -5,7 +5,7 @@ UV ?= uv
 COMPOSE ?= docker compose
 
 .DEFAULT_GOAL := help
-.PHONY: help env install build up up-pipeline up-all down clean ps logs topics schemas schemas-check simulate backfill simulate-faults spark-ingest spark-realtime landing load snowflake-migrate snowflake-tasks-resume snowflake-tasks-suspend reconcile dlq lint format typecheck test-unit test-integration test-spark test-e2e audit check
+.PHONY: test-spark-integration help env install build up up-pipeline up-all down clean ps logs topics schemas schemas-check simulate backfill simulate-faults spark-ingest spark-realtime landing load snowflake-migrate snowflake-tasks-resume snowflake-tasks-suspend reconcile dlq lint format typecheck test-unit test-integration test-spark test-e2e audit check
 
 help: ## Show this help
 	@grep -E "^[a-zA-Z0-9_-]+:.*## " $(MAKEFILE_LIST) | awk -F ":.*## " '{printf "  %-24s %s\n", $$1, $$2}'
@@ -107,7 +107,11 @@ test-integration: ## Integration tests (needs `make up`)
 test-spark: ## Spark tests inside the Spark image (JDK 21)
 	$(COMPOSE) --profile pipeline build spark-ingest
 	docker build -f docker/spark/Dockerfile --target test -t retail-platform/spark-test:local .
-	docker run --rm retail-platform/spark-test:local pytest -m spark -p no:cacheprovider
+	docker run --rm retail-platform/spark-test:local pytest -m "spark and not integration" -p no:cacheprovider
+
+test-spark-integration: ## Kafka->Spark->landing/DLQ/Postgres tests in the Spark image (needs `make up`)
+	docker build -f docker/spark/Dockerfile --target test -t retail-platform/spark-test:local .
+	docker run --rm --network retail-platform_default --env-file .env -e KAFKA_BOOTSTRAP_SERVERS=kafka:29092 -e POSTGRES_HOST=postgres -e POSTGRES_PORT=5432 retail-platform/spark-test:local pytest -m "spark and integration" -p no:cacheprovider
 
 test-e2e: ## End-to-end tests (needs `make up-pipeline`)
 	$(UV) run pytest -m e2e

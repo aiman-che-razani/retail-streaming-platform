@@ -131,7 +131,9 @@ class SparkSettings(BaseSettings):
 class PostgresSettings(BaseSettings):
     model_config = _config("POSTGRES_")
 
-    host: str = "localhost"
+    # 127.0.0.1, not "localhost": on Windows "localhost" resolves to ::1 first and Docker
+    # Desktop's IPv6 port forwarding can stall each connection attempt for many seconds.
+    host: str = "127.0.0.1"
     port: int = 5434
     db: str = "retail_realtime"
     user: str = "retail"
@@ -144,7 +146,7 @@ class PostgresSettings(BaseSettings):
     def conninfo(self) -> str:
         return (
             f"host={self.host} port={self.port} dbname={self.db} "
-            f"user={self.user} password={self.password.get_secret_value()}"
+            f"user={self.user} password={self.password.get_secret_value()} connect_timeout=10"
         )
 
 

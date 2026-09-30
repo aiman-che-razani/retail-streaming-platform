@@ -9,9 +9,10 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 
-from confluent_kafka import KafkaException
+from confluent_kafka import KafkaError, KafkaException
 from confluent_kafka.admin import (
     AdminClient,
     AlterConfigOpType,
@@ -51,12 +52,11 @@ class TopicProvisioner:
         existing = self._admin.list_topics(timeout=_TIMEOUT_S).topics
         missing = [t for t in self._catalog.topics if t.name not in existing]
         if missing:
-            self._create(missing)
-            report.created = [t.name for t in missing]
+            report.created = self._create(missing)
         for spec in self._catalog.topics:
             if spec.name in report.created:
                 continue
-            actual_partitions = len(existing[spec.name].partitions)
+            actual_partitions = self._partition_count(spec.name)
             if actual_partitions != spec.partitions:
                 raise TopicProvisioningError(
                     f"{spec.name} has {actual_partitions} partitions, declared {spec.partitions}."
@@ -76,7 +76,23 @@ class TopicProvisioner:
         )
         return report
 
-    def _create(self, specs: list[TopicSpec]) -> None:
+    def _partition_count(self, topic: str) -> int:
+        """Partition count, waiting briefly for metadata to include a just-created topic."""
+        for _ in range(10):
+            metadata = self._admin.list_topics(topic=topic, timeout=_TIMEOUT_S).topics.get(topic)
+            if metadata is not None and metadata.error is None and metadata.partitions:
+                return len(metadata.partitions)
+            time.sleep(0.5)
+        raise TopicProvisioningError(f"topic {topic} not visible in cluster metadata")
+
+    def _create(self, specs: list[TopicSpec]) -> list[str]:
+        """Create topics; returns those actually created by this call.
+
+        Metadata is eventually consistent: a topic created moments ago (e.g. by a previous
+        run or a concurrent init job) may not be listed yet. TOPIC_ALREADY_EXISTS is therefore
+        success, and the topic is verified like any other existing topic.
+        """
+        created: list[str] = []
         new_topics = [
             NewTopic(
                 spec.name,
@@ -91,8 +107,13 @@ class TopicProvisioner:
             try:
                 future.result()
             except KafkaException as exc:
+                if exc.args and exc.args[0].code() == KafkaError.TOPIC_ALREADY_EXISTS:
+                    log.info("topic_already_exists", topic=name)
+                    continue
                 raise TopicProvisioningError(f"failed to create {name}: {exc}") from exc
+            created.append(name)
             log.info("topic_created", topic=name)
+        return created
 
     def _config_drift(self, spec: TopicSpec) -> dict[str, str]:
         resource = ConfigResource(ResourceType.TOPIC, spec.name)
