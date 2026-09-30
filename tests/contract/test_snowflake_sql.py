@@ -135,3 +135,16 @@ def test_every_task_called_procedure_is_defined() -> None:
     )
     defined = set(re.findall(r"PROCEDURE \{\{DATABASE\}\}\.(\w+\.\w+)\(", defined_sql))
     assert called <= defined, f"tasks call undefined procedures: {called - defined}"
+
+
+def test_replaced_objects_keep_grants_exactly_once() -> None:
+    """CREATE OR REPLACE drops grants unless COPY GRANTS is present - and Snowflake rejects the
+    clause if it appears twice (a real regression caught in the production review)."""
+    for path in (SNOWFLAKE / "transformations").glob("R__*.sql"):
+        sql = path.read_text(encoding="utf-8")
+        statements = re.split(r"\bCREATE OR REPLACE\b", sql)[1:]
+        for statement in statements:
+            head = re.split(r"\bAS\b", statement, maxsplit=1)[0]
+            kind = head.split()[0]
+            if kind in {"PROCEDURE", "FUNCTION", "VIEW"}:
+                assert head.count("COPY GRANTS") == 1, f"{path.name}: {head[:80]!r}"

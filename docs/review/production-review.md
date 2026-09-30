@@ -28,6 +28,10 @@ A whole-repository review by the `code-reviewer` agent (`.claude/agents/code-rev
 | 18 | LOW | Base images pinned by tag rather than digest | Deferred: Dependabot tracks tags; digest pinning is recommended for production |
 | 19 | QUESTION | `FUTURE` grants may require `MANAGE GRANTS` | Removed. The post-deploy grants script re-grants on every deploy instead |
 
+## Verification pass
+
+The reviewer re-checked every CRITICAL and HIGH fix. All were confirmed except one: the fix for #2 had introduced a new defect, a duplicated `COPY GRANTS` clause in every view. Snowflake rejects that, and it would have blocked the whole deployment. It was fixed, and `tests/contract/test_snowflake_sql.py::test_replaced_objects_keep_grants_exactly_once` now guards against it. The reviewer also noted that V004 was edited in place. That is acceptable only because it has never been applied anywhere. From the first live deployment onwards, changes go into new `V###` files (the runner enforces this with checksums).
+
 ## Live Snowflake verification checklist (first deployment)
 
 1. `make snowflake-migrate`, then `retail-snowflake-migrate status` shows nothing pending.
