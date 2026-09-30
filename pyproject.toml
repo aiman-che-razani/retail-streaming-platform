@@ -29,6 +29,7 @@ dev = [
     "mypy>=1.18",
     "types-pyyaml>=6.0",
     "types-jsonschema>=4.23",
+    "sqlglot>=27.0",
     "pip-audit>=2.9",
 ]
 
