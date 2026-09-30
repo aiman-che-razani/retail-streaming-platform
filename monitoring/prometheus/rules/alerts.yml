@@ -1,0 +1,101 @@
+# Alert rules (ADR-009). Every alert is actionable and links to a runbook section.
+# Severity: critical = data at risk / pipeline stopped; warning = degraded, investigate.
+groups:
+  - name: retail-producer
+    rules:
+      - alert: RetailProducerDeliveryFailures
+        expr: increase(retail_producer_messages_total{status="failed"}[5m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "Producer could not deliver {{ $value }} records to {{ $labels.topic }}"
+          description: "Records failed after delivery.timeout.ms - data lost at source unless resent (FM-01)."
+          runbook_url: "docs/runbooks/alerts.md#retailproducerdeliveryfailures"
+
+      - alert: RetailProducerValidationFailures
+        expr: increase(retail_producer_validation_failures_total[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: "Producer refused {{ $value }} schema-invalid events on {{ $labels.topic }}"
+          runbook_url: "docs/runbooks/alerts.md#retailproducervalidationfailures"
+
+  - name: retail-spark
+    rules:
+      - alert: RetailSparkQueryFailed
+        expr: increase(retail_spark_query_failures_total[10m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: "Spark query {{ $labels.query }} terminated with an error"
+          description: "The app exits and Docker restarts it from the checkpoint; repeated failures mean a crash loop (FM-22)."
+          runbook_url: "docs/runbooks/alerts.md#retailsparkqueryfailed"
+
+      - alert: RetailSparkNoProgress
+        # Progress AND idle events refresh this gauge, so a quiet pipeline does not fire.
+        expr: time() - retail_spark_last_progress_timestamp_seconds > 180
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Spark query {{ $labels.query }} has reported nothing for > 3 minutes"
+          runbook_url: "docs/runbooks/alerts.md#retailsparknoprogress"
+
+      - alert: RetailSparkConsumerLagHigh
+        expr: retail_spark_kafka_offsets_behind_latest{stat="max"} > 20000
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.query }} is {{ $value }} offsets behind Kafka"
+          description: "Spark consumer lag (Spark does not use consumer groups - this comes from the Kafka source progress)."
+          runbook_url: "docs/runbooks/alerts.md#retailsparkconsumerlaghigh"
+
+      - alert: RetailRejectRateHigh
+        expr: |
+          sum by (query) (rate(retail_spark_records_total{outcome="rejected"}[5m]))
+            / clamp_min(sum by (query) (rate(retail_spark_input_rows_total[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.query }}: {{ $value | humanizePercentage }} of records rejected to the DLQ"
+          runbook_url: "docs/runbooks/alerts.md#retailrejectratehigh"
+
+      - alert: RetailLateEventsDropped
+        expr: increase(retail_spark_late_rows_dropped_total[15m]) > 50
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} late rows dropped by the realtime watermark in 15 min"
+          description: "Realtime dashboards undercount; the warehouse is still complete (FM-09)."
+          runbook_url: "docs/runbooks/alerts.md#retaillateeventsdropped"
+
+  - name: retail-loader
+    rules:
+      - alert: RetailLoaderStale
+        expr: time() - max(retail_loader_last_success_timestamp_seconds) > 2700
+        labels: {severity: warning}
+        annotations:
+          summary: "No successful Snowflake load for {{ $value | humanizeDuration }}"
+          runbook_url: "docs/runbooks/alerts.md#retailloaderstale"
+
+      - alert: RetailLandingBacklogGrowing
+        expr: sum(retail_loader_landing_backlog_batches) > 200
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $value }} landing batches waiting for Snowflake"
+          description: "Snowflake unreachable or loader stopped; landing buffers until disk fills (FM-11, FM-21)."
+          runbook_url: "docs/runbooks/alerts.md#retaillandingbackloggrowing"
+
+  - name: retail-availability
+    rules:
+      - alert: RetailPipelineComponentDown
+        expr: up{job=~"spark-ingest|spark-realtime"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }} metrics endpoint is down"
+          runbook_url: "docs/runbooks/alerts.md#retailpipelinecomponentdown"
+
+      - alert: RetailDlqVolumeHigh
+        expr: sum by (topic) (rate(kafka_topic_partition_current_offset{topic=~".*\\.dlq"}[5m])) * 60 > 30
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.topic }} receiving {{ $value }} records/min"
+          runbook_url: "docs/runbooks/alerts.md#retaildlqvolumehigh"

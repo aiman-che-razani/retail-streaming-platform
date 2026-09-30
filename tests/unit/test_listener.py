@@ -87,5 +87,16 @@ def test_missing_observed_metrics_and_sources_are_tolerated() -> None:
 def test_failed_query_is_counted() -> None:
     registry = CollectorRegistry()
     listener = PrometheusStreamingListener(StreamingMetrics(registry), "ingest")
+    listener.onQueryStarted(SimpleNamespace(id="q-9", runId="r", name="rt_store_revenue_5m"))
     listener.onQueryTerminated(SimpleNamespace(id="q-9", exception="boom"))
-    assert value(registry, "retail_spark_query_failures_total", query="q-9") == 1
+    assert value(registry, "retail_spark_query_failures_total", query="rt_store_revenue_5m") == 1
+
+
+def test_idle_queries_still_report_liveness() -> None:
+    registry = CollectorRegistry()
+    listener = PrometheusStreamingListener(StreamingMetrics(registry), "ingest")
+    listener.onQueryStarted(SimpleNamespace(id="q-1", runId="r", name="ingest_pos_transactions"))
+    listener.onQueryIdle(SimpleNamespace(id="q-1"))
+    assert value(
+        registry, "retail_spark_last_progress_timestamp_seconds", query="ingest_pos_transactions"
+    )

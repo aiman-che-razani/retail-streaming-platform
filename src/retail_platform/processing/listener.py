@@ -84,8 +84,10 @@ class PrometheusStreamingListener(StreamingQueryListener):
     def __init__(self, metrics: StreamingMetrics, observed_name: str) -> None:
         self._m = metrics
         self._observed = observed_name
+        self._names: dict[str, str] = {}  # query id -> name (idle/terminated events lack names)
 
     def onQueryStarted(self, event: Any) -> None:  # noqa: N802 - Spark API name
+        self._names[str(event.id)] = event.name or str(event.id)
         log.info("query_started", query=event.name, query_id=str(event.id), run_id=str(event.runId))
 
     def onQueryProgress(self, event: Any) -> None:  # noqa: N802
@@ -136,11 +138,14 @@ class PrometheusStreamingListener(StreamingQueryListener):
         )
 
     def onQueryIdle(self, event: Any) -> None:  # noqa: N802
-        return None
+        # No new data is not a failure: an idle query is alive. Without this, a quiet
+        # pipeline would trigger the "no progress" alert.
+        name = self._names.get(str(event.id), str(event.id))
+        self._m.last_progress.labels(name).set(time.time())
 
     def onQueryTerminated(self, event: Any) -> None:  # noqa: N802
         if event.exception:
-            self._m.query_failures.labels(str(event.id)).inc()
+            self._m.query_failures.labels(self._names.get(str(event.id), str(event.id))).inc()
             log.error("query_failed", query_id=str(event.id), error=str(event.exception)[:2000])
         else:
             log.info("query_stopped", query_id=str(event.id))
