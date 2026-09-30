@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # astral publishes full version tags only
         with:
           enable-cache: true
       - name: Install (locked)
@@ -45,7 +45,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # astral publishes full version tags only
         with:
           enable-cache: true
       - run: uv sync --locked --extra snowflake --extra spark
@@ -65,7 +65,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # astral publishes full version tags only
         with:
           enable-cache: true
       - run: uv sync --locked --extra spark
@@ -81,7 +81,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0   # base-branch schemas for the compatibility gate
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # astral publishes full version tags only
         with:
           enable-cache: true
       - run: uv sync --locked --extra snowflake --extra spark
@@ -133,7 +133,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0  # astral publishes full version tags only
       - name: Dependency vulnerability audit (locked versions)
         run: |
           uv export --locked --no-hashes --format requirements-txt --extra snowflake --extra spark --no-emit-project > requirements.txt
