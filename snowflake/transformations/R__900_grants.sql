@@ -1,6 +1,7 @@
 -- =============================================================================
--- Object privileges (least privilege, ADR-005). Repeatable: re-applied whenever it changes,
--- and it runs last so it also covers objects created by earlier scripts.
+-- Object privileges (least privilege, ADR-005). A POST-DEPLOY script: the migration runner
+-- re-applies it after ANY other script, so objects created or replaced by any deploy are
+-- always re-granted (no FUTURE grants needed, which would require MANAGE GRANTS).
 --
 --   RETAIL_ADMIN        owns everything (runs migrations)
 --   RETAIL_LOADER       PUT to the stage, COPY into RAW - nothing else
@@ -36,20 +37,12 @@ GRANT USAGE ON ALL PROCEDURES IN SCHEMA {{DATABASE}}.STAGING   TO ROLE RETAIL_TR
 GRANT USAGE ON ALL PROCEDURES IN SCHEMA {{DATABASE}}.ANALYTICS TO ROLE RETAIL_TRANSFORMER;
 GRANT USAGE ON ALL PROCEDURES IN SCHEMA {{DATABASE}}.OPS       TO ROLE RETAIL_TRANSFORMER;
 
--- Tasks run with their OWNER's privileges. Hand them to the transformer (tasks are suspended
--- after CREATE OR REPLACE, which ownership transfer requires).
-GRANT OWNERSHIP ON TASK {{DATABASE}}.OPS.TASK_PIPELINE_ROOT      TO ROLE RETAIL_TRANSFORMER COPY CURRENT GRANTS;
-GRANT OWNERSHIP ON TASK {{DATABASE}}.OPS.TASK_DIMENSIONS         TO ROLE RETAIL_TRANSFORMER COPY CURRENT GRANTS;
-GRANT OWNERSHIP ON TASK {{DATABASE}}.OPS.TASK_FACTS              TO ROLE RETAIL_TRANSFORMER COPY CURRENT GRANTS;
-GRANT OWNERSHIP ON TASK {{DATABASE}}.OPS.TASK_DQ_CHECKS          TO ROLE RETAIL_TRANSFORMER COPY CURRENT GRANTS;
-GRANT OWNERSHIP ON TASK {{DATABASE}}.OPS.TASK_INVENTORY_SNAPSHOT TO ROLE RETAIL_TRANSFORMER COPY CURRENT GRANTS;
+-- Task ownership is transferred in R__800_tasks.sql (whole graph at once).
 
 -- ----------------------------------------------------------------------------- analyst
 GRANT USAGE ON SCHEMA {{DATABASE}}.ANALYTICS TO ROLE RETAIL_ANALYST;
 GRANT SELECT ON ALL TABLES IN SCHEMA {{DATABASE}}.ANALYTICS    TO ROLE RETAIL_ANALYST;
 GRANT SELECT ON ALL VIEWS  IN SCHEMA {{DATABASE}}.ANALYTICS    TO ROLE RETAIL_ANALYST;
-GRANT SELECT ON FUTURE TABLES IN SCHEMA {{DATABASE}}.ANALYTICS TO ROLE RETAIL_ANALYST;
-GRANT SELECT ON FUTURE VIEWS  IN SCHEMA {{DATABASE}}.ANALYTICS TO ROLE RETAIL_ANALYST;
 GRANT USAGE ON ALL FUNCTIONS IN SCHEMA {{DATABASE}}.ANALYTICS  TO ROLE RETAIL_ANALYST;
 -- Analysts may see data-quality status and freshness (read-only), but no pipeline internals.
 GRANT USAGE ON SCHEMA {{DATABASE}}.OPS TO ROLE RETAIL_ANALYST;

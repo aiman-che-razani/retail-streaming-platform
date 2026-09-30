@@ -25,23 +25,30 @@ LIMIT 100;
 -- Inventory turnover (units) per category over the last 30 days:
 --   turnover = units sold in period / AVERAGE units on hand in period
 -- The average comes from the daily periodic snapshot - the reason that fact table exists.
+-- Two-step aggregation is essential for a SEMI-additive measure: first SUM on-hand across
+-- stores and products for each DAY (valid at one point in time), then AVERAGE those daily
+-- totals over the period. Categories use the product's CURRENT category (grouped by
+-- PRODUCT_ID, so a product's SCD2 versions are not counted as separate products).
 WITH period AS (
-    SELECT sn.PRODUCT_KEY, sn.STORE_KEY, sn.DATE_KEY, sn.CLOSING_ON_HAND, sn.UNITS_SOLD
+    SELECT pc.CATEGORY, sn.DATE_KEY, sn.CLOSING_ON_HAND, sn.UNITS_SOLD
     FROM FACT_INVENTORY_SNAPSHOT sn
     JOIN DIM_DATE d ON d.DATE_KEY = sn.DATE_KEY
+    JOIN VW_DIM_PRODUCT_CURRENT pc ON pc.PRODUCT_ID = sn.PRODUCT_ID
     WHERE d.FULL_DATE >= DATEADD(DAY, -30, CURRENT_DATE())
 ),
+daily_category AS (
+    SELECT CATEGORY, DATE_KEY,
+           SUM(CLOSING_ON_HAND) AS on_hand_that_day,
+           SUM(UNITS_SOLD)      AS sold_that_day
+    FROM period
+    GROUP BY CATEGORY, DATE_KEY
+),
 per_category AS (
-    SELECT p.CATEGORY,
-           SUM(pe.UNITS_SOLD)                                         AS units_sold,
-           -- average over days of the (store x product) total per day
-           AVG(daily_on_hand)                                         AS avg_units_on_hand
-    FROM (
-        SELECT PRODUCT_KEY, DATE_KEY, SUM(CLOSING_ON_HAND) AS daily_on_hand, SUM(UNITS_SOLD) AS UNITS_SOLD
-        FROM period GROUP BY PRODUCT_KEY, DATE_KEY
-    ) pe
-    JOIN DIM_PRODUCT p ON p.PRODUCT_KEY = pe.PRODUCT_KEY
-    GROUP BY p.CATEGORY
+    SELECT CATEGORY,
+           SUM(sold_that_day)     AS units_sold,
+           AVG(on_hand_that_day)  AS avg_units_on_hand
+    FROM daily_category
+    GROUP BY CATEGORY
 )
 SELECT CATEGORY, units_sold, avg_units_on_hand,
        units_sold / NULLIF(avg_units_on_hand, 0)          AS turnover_30d,

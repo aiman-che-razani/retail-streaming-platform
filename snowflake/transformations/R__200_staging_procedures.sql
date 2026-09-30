@@ -9,13 +9,14 @@
 --
 -- Dedup rules:
 --   * transport duplicates (same event_id) and business duplicates (same transaction_id /
---     movement_id with another event_id) collapse to ONE row; the first event wins
---     (earliest event time, then load order);
+--     movement_id with another event_id) collapse to ONE row. Within one run the earliest
+--     event (event time, then load order) wins; across runs the event staged first wins;
 --   * business duplicates are recorded in OPS.BUSINESS_DUPLICATES (rule SF-002).
 -- =============================================================================
 
 -- ----------------------------------------------------------------------------- stores (SCD1)
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.STAGING.SP_STAGE_STORES()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -43,6 +44,7 @@ $$;
 
 -- ----------------------------------------------------------------------------- POS lines
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.STAGING.SP_STAGE_POS()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -82,6 +84,8 @@ BEGIN
     FROM incoming i
     JOIN winners w ON w.BUSINESS_KEY = i.BUSINESS_KEY
     WHERE i.EVENT_ID <> w.KEPT_EVENT_ID
+      AND NOT EXISTS (SELECT 1 FROM {{DATABASE}}.OPS.BUSINESS_DUPLICATES b
+                      WHERE b.DUPLICATE_EVENT_ID = i.EVENT_ID)   -- redelivery: already logged
     QUALIFY ROW_NUMBER() OVER (PARTITION BY i.EVENT_ID ORDER BY i.KAFKA_PARTITION, i.KAFKA_OFFSET) = 1;
 
     MERGE INTO {{DATABASE}}.STAGING.STG_POS_TRANSACTION_LINES t
@@ -127,7 +131,12 @@ BEGIN
         LEFT JOIN {{DATABASE}}.STAGING.STG_STORES s ON s.STORE_ID = t.STORE_ID
     ) src
     ON t.TRANSACTION_ID = src.TRANSACTION_ID AND t.LINE_NUMBER = src.LINE_NUMBER
-    WHEN NOT MATCHED THEN INSERT
+    -- Whole-basket semantics: a transaction already staged is never extended by lines from a
+    -- later (discarded) event, even if that event had more lines.
+    WHEN NOT MATCHED AND NOT EXISTS (
+        SELECT 1 FROM {{DATABASE}}.STAGING.STG_POS_TRANSACTION_LINES x
+        WHERE x.TRANSACTION_ID = src.TRANSACTION_ID
+    ) THEN INSERT
         (TRANSACTION_ID, LINE_NUMBER, EVENT_ID, STORE_ID, REGISTER_ID, CUSTOMER_ID, PAYMENT_METHOD,
          CURRENCY, PRODUCT_ID, QUANTITY, UNIT_PRICE, DISCOUNT_AMOUNT, GROSS_AMOUNT, NET_AMOUNT,
          TRANSACTION_TOTAL, EVENT_TS_UTC, EVENT_TS_LOCAL, BUSINESS_DATE, LOCAL_HOUR, DQ_WARNINGS,
@@ -152,6 +161,7 @@ $$;
 
 -- ----------------------------------------------------------------------------- inventory
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.STAGING.SP_STAGE_INVENTORY()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -190,6 +200,8 @@ BEGIN
     FROM incoming i
     JOIN winners w ON w.BUSINESS_KEY = i.BUSINESS_KEY
     WHERE i.EVENT_ID <> w.KEPT_EVENT_ID
+      AND NOT EXISTS (SELECT 1 FROM {{DATABASE}}.OPS.BUSINESS_DUPLICATES b
+                      WHERE b.DUPLICATE_EVENT_ID = i.EVENT_ID)   -- redelivery: already logged
     QUALIFY ROW_NUMBER() OVER (PARTITION BY i.EVENT_ID ORDER BY i.KAFKA_PARTITION, i.KAFKA_OFFSET) = 1;
 
     MERGE INTO {{DATABASE}}.STAGING.STG_INVENTORY_MOVEMENTS t
@@ -247,6 +259,7 @@ $$;
 
 -- ----------------------------------------------------------------------------- customer changes (all versions)
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.STAGING.SP_STAGE_CUSTOMERS()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -285,6 +298,7 @@ $$;
 
 -- ----------------------------------------------------------------------------- product changes (all versions)
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.STAGING.SP_STAGE_PRODUCTS()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -325,6 +339,7 @@ $$;
 -- ----------------------------------------------------------------------------- orchestration
 -- Stores first: POS/inventory staging needs the store timezone.
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.STAGING.SP_STAGE_ALL()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER

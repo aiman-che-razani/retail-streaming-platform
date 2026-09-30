@@ -156,3 +156,11 @@ def test_unknown_extra_fields_are_tolerated(spark: SparkSession, catalog: TopicC
     event["payload"]["channel"] = "CLICK_AND_COLLECT"
     (row,) = validate(spark, catalog, [framed(event)], "pos-transactions")
     assert row["is_valid"]
+
+
+def test_product_without_brand_is_rejected(spark: SparkSession, catalog: TopicCatalog) -> None:
+    """DIM_PRODUCT.BRAND is NOT NULL: one such event would otherwise stall the task graph."""
+    event = fresh(example("product-updates.price-change.json"))
+    del event["payload"]["brand"]
+    (row,) = validate(spark, catalog, [framed(event)], "product-updates")
+    assert row["rejection"]["rule_id"] == "PRD-001"

@@ -5,7 +5,7 @@
 --     └─ TASK_DIMENSIONS -> SP_LOAD_DIMENSIONS
 --          └─ TASK_FACTS -> SP_LOAD_FACTS
 --               └─ TASK_DQ_CHECKS -> SP_RUN_DQ_CHECKS
---   TASK_INVENTORY_SNAPSHOT (daily 00:30 Asia/Kuala_Lumpur, independent)
+--   TASK_INVENTORY_SNAPSHOT (daily 00:30 Asia/Kuala_Lumpur, independent; rebuilds the last 3 days)
 --
 -- COST: the WHEN condition is evaluated by the cloud-services layer WITHOUT a warehouse.
 -- If no stream has new rows the run is skipped and costs nothing. Tasks are created
@@ -67,6 +67,13 @@ CREATE OR REPLACE TASK {{DATABASE}}.OPS.TASK_INVENTORY_SNAPSHOT
     WAREHOUSE = RETAIL_PIPELINE_WH
     SCHEDULE = 'USING CRON 30 0 * * * Asia/Kuala_Lumpur'
     USER_TASK_TIMEOUT_MS = 900000
-    COMMENT = 'Daily closing inventory position for yesterday (local business date)'
+    COMMENT = 'Rebuild closing inventory positions for the last 3 local business days (absorbs late data)'
 AS
-    CALL {{DATABASE}}.ANALYTICS.SP_BUILD_INVENTORY_SNAPSHOT(NULL);
+    CALL {{DATABASE}}.ANALYTICS.SP_BUILD_RECENT_INVENTORY_SNAPSHOTS(3);
+
+-- Tasks run with their OWNER's privileges. Every task in a graph must have the same owner,
+-- and transferring ownership task-by-task severs predecessor links, so the whole schema's
+-- tasks are handed to the transformer in ONE statement (tasks are suspended after
+-- CREATE OR REPLACE, which ownership transfer requires). Re-applied on every deploy of
+-- this script, so a recreated task can never be left owned by RETAIL_ADMIN.
+GRANT OWNERSHIP ON ALL TASKS IN SCHEMA {{DATABASE}}.OPS TO ROLE RETAIL_TRANSFORMER COPY CURRENT GRANTS;

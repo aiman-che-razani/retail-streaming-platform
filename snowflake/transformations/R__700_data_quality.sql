@@ -13,6 +13,7 @@
 -- =============================================================================
 
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.OPS.SP_RUN_DQ_CHECKS()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -21,17 +22,22 @@ $$
 DECLARE
     run_id VARCHAR DEFAULT UUID_STRING();
     grace_minutes INTEGER DEFAULT 30;
+    window_hours INTEGER DEFAULT 48;   -- checks cover recent loads only: bounded warehouse cost
     failures INTEGER DEFAULT 0;
 BEGIN
     -- SF-001 (INFO): transport duplicates in RAW (same event_id loaded more than once).
     INSERT INTO {{DATABASE}}.OPS.DQ_RESULTS (RUN_ID, RULE_ID, RULE_NAME, SEVERITY, STATUS, OBSERVED_VALUE, THRESHOLD, DETAILS)
     WITH counts AS (
         SELECT 'pos_transactions' AS dataset, COUNT(*) - COUNT(DISTINCT EVENT_ID) AS dup FROM {{DATABASE}}.RAW.POS_TRANSACTIONS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
         UNION ALL SELECT 'inventory_movements', COUNT(*) - COUNT(DISTINCT EVENT_ID) FROM {{DATABASE}}.RAW.INVENTORY_MOVEMENTS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
         UNION ALL SELECT 'customer_events', COUNT(*) - COUNT(DISTINCT EVENT_ID) FROM {{DATABASE}}.RAW.CUSTOMER_EVENTS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
         UNION ALL SELECT 'product_events', COUNT(*) - COUNT(DISTINCT EVENT_ID) FROM {{DATABASE}}.RAW.PRODUCT_EVENTS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
     )
-    SELECT :run_id, 'SF-001', 'Transport duplicates in RAW (removed by STAGING)', 'INFO',
+    SELECT :run_id, 'SF-001', 'Transport duplicates in RAW loaded in the last 48h (removed by STAGING)', 'INFO',
            IFF(SUM(dup) = 0, 'PASS', 'FAIL'), SUM(dup), 0, OBJECT_AGG(dataset, dup::VARIANT)
     FROM counts;
 
@@ -85,6 +91,7 @@ BEGIN
                SUM(RECORDS_VALID) AS valid, SUM(RECORDS_REJECTED) AS rejected, MIN(_LOADED_AT) AS loaded_at
         FROM (
             SELECT * FROM {{DATABASE}}.RAW.INGEST_BATCH_AUDIT
+            WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
             QUALIFY ROW_NUMBER() OVER (PARTITION BY DATASET, SPARK_QUERY_ID, SPARK_BATCH_ID, KAFKA_TOPIC, KAFKA_PARTITION
                                        ORDER BY _LOADED_AT DESC) = 1
         )
@@ -93,16 +100,20 @@ BEGIN
     raw_counts AS (
         SELECT 'pos_transactions' AS DATASET, SPARK_QUERY_ID, SPARK_BATCH_ID,
                COUNT(DISTINCT KAFKA_TOPIC, KAFKA_PARTITION, KAFKA_OFFSET) AS loaded
-        FROM {{DATABASE}}.RAW.POS_TRANSACTIONS GROUP BY 1, 2, 3
+        FROM {{DATABASE}}.RAW.POS_TRANSACTIONS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours - 1, SYSDATE()) GROUP BY 1, 2, 3
         UNION ALL
         SELECT 'inventory_movements', SPARK_QUERY_ID, SPARK_BATCH_ID, COUNT(DISTINCT KAFKA_TOPIC, KAFKA_PARTITION, KAFKA_OFFSET)
-        FROM {{DATABASE}}.RAW.INVENTORY_MOVEMENTS GROUP BY 1, 2, 3
+        FROM {{DATABASE}}.RAW.INVENTORY_MOVEMENTS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours - 1, SYSDATE()) GROUP BY 1, 2, 3
         UNION ALL
         SELECT 'customer_events', SPARK_QUERY_ID, SPARK_BATCH_ID, COUNT(DISTINCT KAFKA_TOPIC, KAFKA_PARTITION, KAFKA_OFFSET)
-        FROM {{DATABASE}}.RAW.CUSTOMER_EVENTS GROUP BY 1, 2, 3
+        FROM {{DATABASE}}.RAW.CUSTOMER_EVENTS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours - 1, SYSDATE()) GROUP BY 1, 2, 3
         UNION ALL
         SELECT 'product_events', SPARK_QUERY_ID, SPARK_BATCH_ID, COUNT(DISTINCT KAFKA_TOPIC, KAFKA_PARTITION, KAFKA_OFFSET)
-        FROM {{DATABASE}}.RAW.PRODUCT_EVENTS GROUP BY 1, 2, 3
+        FROM {{DATABASE}}.RAW.PRODUCT_EVENTS
+        WHERE _LOADED_AT >= DATEADD(HOUR, -:window_hours - 1, SYSDATE()) GROUP BY 1, 2, 3
     ),
     compared AS (
         SELECT a.DATASET, a.SPARK_QUERY_ID, a.SPARK_BATCH_ID, a.valid, COALESCE(r.loaded, 0) AS loaded
@@ -127,6 +138,7 @@ BEGIN
         SELECT COUNT(DISTINCT r.EVENT:payload:transaction_id::VARCHAR) AS n
         FROM {{DATABASE}}.RAW.POS_TRANSACTIONS r
         WHERE r._LOADED_AT < DATEADD(MINUTE, -:grace_minutes, SYSDATE())
+          AND r._LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
           AND NOT EXISTS (SELECT 1 FROM {{DATABASE}}.STAGING.STG_POS_TRANSACTION_LINES s
                           WHERE s.TRANSACTION_ID = r.EVENT:payload:transaction_id::VARCHAR)
     ),
@@ -134,6 +146,7 @@ BEGIN
         SELECT COUNT(DISTINCT r.EVENT:payload:movement_id::VARCHAR) AS n
         FROM {{DATABASE}}.RAW.INVENTORY_MOVEMENTS r
         WHERE r._LOADED_AT < DATEADD(MINUTE, -:grace_minutes, SYSDATE())
+          AND r._LOADED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
           AND NOT EXISTS (SELECT 1 FROM {{DATABASE}}.STAGING.STG_INVENTORY_MOVEMENTS s
                           WHERE s.MOVEMENT_ID = r.EVENT:payload:movement_id::VARCHAR)
     ),
@@ -141,6 +154,7 @@ BEGIN
         SELECT COUNT(*) AS n
         FROM {{DATABASE}}.STAGING.STG_POS_TRANSACTION_LINES s
         WHERE s._STAGED_AT < DATEADD(MINUTE, -:grace_minutes, SYSDATE())
+          AND s._STAGED_AT >= DATEADD(HOUR, -:window_hours, SYSDATE())
           AND NOT EXISTS (SELECT 1 FROM {{DATABASE}}.ANALYTICS.FACT_SALES f
                           WHERE f.TRANSACTION_ID = s.TRANSACTION_ID AND f.LINE_NUMBER = s.LINE_NUMBER)
     )
@@ -183,7 +197,7 @@ END;
 $$;
 
 -- Latest result per rule (what dashboards and `retail-reconcile` read).
-CREATE OR REPLACE VIEW {{DATABASE}}.OPS.VW_DQ_LATEST AS
+CREATE OR REPLACE VIEW {{DATABASE}}.OPS.VW_DQ_LATEST COPY GRANTS COPY GRANTS AS
 SELECT *
 FROM {{DATABASE}}.OPS.DQ_RESULTS
 QUALIFY ROW_NUMBER() OVER (PARTITION BY RULE_ID ORDER BY CHECKED_AT DESC) = 1;

@@ -9,6 +9,7 @@
 -- =============================================================================
 
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.ANALYTICS.SP_LOAD_FACT_SALES()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -84,6 +85,7 @@ END;
 $$;
 
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.ANALYTICS.SP_LOAD_FACT_INVENTORY()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -144,6 +146,7 @@ END;
 $$;
 
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.ANALYTICS.SP_LOAD_FACTS()
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -160,6 +163,7 @@ $$;
 -- Grain: store x product x business date. Idempotent for a date (delete + insert in one txn).
 -- P_DATE NULL = yesterday in Malaysian local time (the daily task's default).
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.ANALYTICS.SP_BUILD_INVENTORY_SNAPSHOT(P_DATE DATE)
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -241,6 +245,7 @@ $$;
 
 -- Backfill helper: CALL ANALYTICS.SP_BACKFILL_INVENTORY_SNAPSHOTS('2026-09-01', '2026-09-29');
 CREATE OR REPLACE PROCEDURE {{DATABASE}}.ANALYTICS.SP_BACKFILL_INVENTORY_SNAPSHOTS(P_FROM DATE, P_TO DATE)
+COPY GRANTS
 RETURNS VARCHAR
 LANGUAGE SQL
 EXECUTE AS OWNER
@@ -257,5 +262,26 @@ BEGIN
         days := days + 1;
     END WHILE;
     RETURN 'snapshots built for ' || days || ' days';
+END;
+$$;
+
+-- Nightly: rebuild the last N local business days. Movements that arrive late (offline
+-- tills, loader/task latency, redrives) are therefore reflected for up to N days; older
+-- corrections need an explicit SP_BACKFILL_INVENTORY_SNAPSHOTS call (documented bound).
+CREATE OR REPLACE PROCEDURE {{DATABASE}}.ANALYTICS.SP_BUILD_RECENT_INVENTORY_SNAPSHOTS(P_DAYS INTEGER)
+COPY GRANTS
+RETURNS VARCHAR
+LANGUAGE SQL
+EXECUTE AS OWNER
+AS
+$$
+DECLARE
+    yesterday DATE;
+    first_day DATE;
+BEGIN
+    yesterday := DATEADD(DAY, -1, TO_DATE(CONVERT_TIMEZONE('Asia/Kuala_Lumpur', CURRENT_TIMESTAMP())));
+    first_day := DATEADD(DAY, 1 - P_DAYS, yesterday);
+    CALL {{DATABASE}}.ANALYTICS.SP_BACKFILL_INVENTORY_SNAPSHOTS(:first_day, :yesterday);
+    RETURN 'rebuilt snapshots ' || first_day || '..' || yesterday;
 END;
 $$;

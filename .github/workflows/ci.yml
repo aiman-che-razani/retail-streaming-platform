@@ -136,8 +136,10 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0  # astral publishes full version tags only
       - name: Dependency vulnerability audit (locked versions)
         run: |
-          uv export --locked --no-hashes --format requirements-txt --extra snowflake --extra spark --no-emit-project > requirements.txt
-          uvx pip-audit --strict --requirement requirements.txt
+          # Hashed, fully pinned export of uv.lock: audit exactly what is locked, with no
+          # dependency re-resolution (fast, deterministic) and hash integrity checks.
+          uv export --locked --format requirements-txt --extra snowflake --extra spark --no-emit-project > requirements.txt
+          uvx pip-audit --strict --require-hashes --disable-pip --requirement requirements.txt
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v3
         env:

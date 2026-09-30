@@ -199,8 +199,9 @@ def product_rules() -> list[Rule]:
     return [
         Rule(
             "PRD-001", Severity.REJECT, ErrorStage.VALIDATE, "required product field missing",
-            _any_null("payload", ("product_id", "product_name", "category", "list_price",
-                                  "unit_cost", "is_active")),
+            _any_null("payload", ("product_id", "product_name", "brand", "category",
+                                  "subcategory", "list_price", "unit_cost", "unit_of_measure",
+                                  "is_active")),
         ),
         Rule(
             "PRD-002", Severity.REJECT, ErrorStage.VALIDATE, "negative price or cost",

@@ -70,6 +70,8 @@ GRANT USAGE ON WAREHOUSE RETAIL_ANALYTICS_WH TO ROLE RETAIL_ADMIN;
 
 -- ----------------------------------------------------------------------------- database
 CREATE DATABASE IF NOT EXISTS {{DATABASE}} COMMENT = 'Retail streaming platform';
+-- PUBLIC is created with (and owned by) the creating role: drop it before handing over.
+DROP SCHEMA IF EXISTS {{DATABASE}}.PUBLIC;
 GRANT OWNERSHIP ON DATABASE {{DATABASE}} TO ROLE RETAIL_ADMIN COPY CURRENT GRANTS;
 
 USE ROLE RETAIL_ADMIN;
@@ -78,7 +80,6 @@ CREATE SCHEMA IF NOT EXISTS RAW       COMMENT = 'As-ingested events + lineage (a
 CREATE SCHEMA IF NOT EXISTS STAGING   COMMENT = 'Typed, deduplicated, conformed';
 CREATE SCHEMA IF NOT EXISTS ANALYTICS COMMENT = 'Star schema for analysts';
 CREATE SCHEMA IF NOT EXISTS OPS       COMMENT = 'Pipeline metadata: migrations, DQ, reconciliation';
-DROP SCHEMA IF EXISTS PUBLIC;
 
 GRANT USAGE ON DATABASE {{DATABASE}} TO ROLE RETAIL_LOADER;
 GRANT USAGE ON DATABASE {{DATABASE}} TO ROLE RETAIL_TRANSFORMER;

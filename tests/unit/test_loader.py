@@ -193,3 +193,20 @@ def test_archive_retention(tmp_path: Path) -> None:
     os.utime(old / "_SUCCESS", (ten_days_ago, ten_days_ago))
     assert purge_archive(tmp_path, retention_days=3) == 1
     assert not old.exists()
+
+
+def test_datasets_loaded_before_a_failure_are_archived(env: dict[str, Any]) -> None:
+    """A later dataset failing must not force re-upload of already-loaded files."""
+    make_batch(env["landing"], "ingest_audit", 1)
+    make_batch(env["landing"], "pos_transactions", 1)
+    env["conn"].copy_status["RAW.POS_TRANSACTIONS"] = "LOAD_FAILED"
+    with pytest.raises(LoadVerificationError):
+        env["loader"].run_cycle()
+    remaining = {p.parent.parent.parent.name for p in env["landing"].rglob("_SUCCESS")}
+    assert remaining == {"pos_transactions"}  # audit was archived, events stay for retry
+
+
+def test_idle_cycle_reports_freshness(env: dict[str, Any]) -> None:
+    env["loader"].run_cycle()
+    registry_value = env["loader"]._metrics.last_success.labels("pos_transactions")._value.get()
+    assert registry_value > 0

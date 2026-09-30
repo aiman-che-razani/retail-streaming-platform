@@ -1,6 +1,6 @@
 # Runbook: Alerts
 
-Alert rules live in [`monitoring/prometheus/rules/alerts.yml`](../../monitoring/prometheus/rules/alerts.yml). Open Prometheus at <http://localhost:9090/alerts> and Grafana at <http://localhost:3030>.
+Alert rules live in [`monitoring/prometheus/rules/alerts.yml`](../../monitoring/prometheus/rules/alerts.yml). Open Prometheus at <http://localhost:9090/alerts> and Grafana at <http://localhost:3030> (all ports are bound to 127.0.0.1).
 
 Useful commands: `make ps`, `make logs s=<service>`, `make dlq t=<topic>`, `make reconcile`.
 
@@ -40,6 +40,10 @@ Useful commands: `make ps`, `make logs s=<service>`, `make dlq t=<topic>`, `make
 ## RetailLandingBacklogGrowing
 **Meaning:** completed batches are piling up in `data/landing`.
 **Fix:** same causes as RetailLoaderStale. Once Snowflake is back, `make load` drains the backlog. Loads are idempotent.
+
+## RetailLoaderCrashLooping
+**Meaning:** the loader container keeps restarting, usually a configuration error (credentials, key path). Idle-but-healthy loaders do NOT alert.
+**Check:** `make logs s=loader | grep fatal_error` - the message names the missing/invalid setting.
 
 ## RetailPipelineComponentDown
 **Meaning:** Prometheus can't scrape a Spark app.

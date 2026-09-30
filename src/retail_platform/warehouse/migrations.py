@@ -4,6 +4,8 @@
   edited afterwards (a changed checksum of an applied migration is an error).
 * `snowflake/transformations/R__description.sql` — repeatable (procedures, views, tasks,
   grants); re-applied whenever their checksum changes, after all versioned migrations.
+* `R__9xx_*` scripts are POST-DEPLOY: re-applied whenever ANY other script is applied.
+  Grants live there, so replacing a procedure or task can never silently drop privileges.
 * History lives in `OPS.SCHEMA_MIGRATIONS`.
 * `{{PLACEHOLDER}}` tokens are rendered from explicit variables; an unknown token is an error
   (so a typo can never reach Snowflake as literal text).
@@ -30,6 +32,9 @@ _VERSIONED = re.compile(r"^V(\d+)__(.+)\.sql$")
 _REPEATABLE = re.compile(r"^R__(.+)\.sql$")
 
 
+POST_DEPLOY_PREFIX = "9"
+
+
 class Kind(StrEnum):
     VERSIONED = "V"
     REPEATABLE = "R"
@@ -46,6 +51,10 @@ class Script:
     @property
     def key(self) -> str:
         return f"{self.kind.value}{self.version}"
+
+    @property
+    def is_post_deploy(self) -> bool:
+        return self.kind is Kind.REPEATABLE and self.version.startswith(POST_DEPLOY_PREFIX)
 
 
 class Connection(Protocol):
@@ -135,7 +144,8 @@ class MigrationRunner:
     def pending(self) -> list[Script]:
         applied = self._applied()
         pending: list[Script] = []
-        for script in discover(self._dir):
+        scripts = discover(self._dir)
+        for script in scripts:
             previous = applied.get(script.key)
             if script.kind is Kind.VERSIONED:
                 if previous is not None and previous != script.checksum:
@@ -147,6 +157,10 @@ class MigrationRunner:
                     pending.append(script)
             elif previous != script.checksum:
                 pending.append(script)
+        if any(not s.is_post_deploy for s in pending):
+            for script in scripts:
+                if script.is_post_deploy and script not in pending:
+                    pending.append(script)
         return pending
 
     def apply(self, *, dry_run: bool = False) -> list[Script]:

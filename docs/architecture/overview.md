@@ -179,16 +179,18 @@ data/archive/<same layout>                loaded batches (deleted after LANDING_
 
 `query_id` comes from the checkpoint, so resetting a checkpoint can never collide with an earlier run's `batch_id`s (see ADR-007).
 
+**Timestamps are ISO-8601 UTC strings** (`2026-09-29T12:31:42.215000Z`), not Parquet timestamp types. Parquet timestamp encodings (INT96 vs INT64, UTC-adjusted or not) are a classic source of silent timezone shifts between engines; an explicit `Z` string is unambiguous and is parsed with an explicit format by `COPY INTO`.
+
 **Event dataset columns** (identical for the four event datasets; Snowflake RAW mirrors them):
 
 | Column | Type | Source |
 |---|---|---|
-| `kafka_topic`, `kafka_partition`, `kafka_offset`, `kafka_timestamp`, `kafka_key` | string, int, long, timestamp, string | Kafka record |
+| `kafka_topic`, `kafka_partition`, `kafka_offset`, `kafka_timestamp`, `kafka_key` | string, int, long, string (ISO-8601 UTC), string | Kafka record |
 | `schema_id` | int | Confluent wire-format header |
-| `event_id`, `event_type`, `schema_version`, `event_timestamp`, `produced_at`, `producer`, `correlation_id`, `causation_id` | typed | envelope `metadata` |
+| `event_id`, `event_type`, `schema_version`, `event_timestamp`, `produced_at`, `producer`, `correlation_id`, `causation_id` | string (timestamps as ISO-8601 UTC `…Z`) | envelope `metadata` |
 | `event_json` | string | the complete envelope JSON exactly as received (becomes `VARIANT` in RAW) |
 | `dq_warnings` | string (JSON array) | IDs of WARN-severity rules the record violated, e.g. `["POS-008"]` |
-| `ingested_at` | timestamp | Spark processing time |
+| `ingested_at` | string (ISO-8601 UTC) | Spark processing time |
 | `spark_query_id`, `spark_batch_id` | string, long | lineage |
 
 ## 7. Deployment view (local)

@@ -7,6 +7,7 @@
 -- 1900-01-01) and the real first version always get the SAME key: facts that point at an
 -- inferred product "fill in" automatically when the real product arrives.
 CREATE OR REPLACE FUNCTION {{DATABASE}}.ANALYTICS.SCD2_KEY(NATURAL_KEY VARCHAR, EFFECTIVE_FROM TIMESTAMP_NTZ)
+COPY GRANTS
 RETURNS NUMBER(38,0)
 COMMENT = 'MD5_NUMBER_LOWER64(natural_key | effective_from) - reproducible across rebuilds'
 AS
@@ -16,6 +17,7 @@ $$;
 
 -- First version of every SCD2 key starts at the beginning of time so any fact finds a version.
 CREATE OR REPLACE FUNCTION {{DATABASE}}.ANALYTICS.BEGINNING_OF_TIME()
+COPY GRANTS
 RETURNS TIMESTAMP_NTZ
 AS
 $$
@@ -23,6 +25,7 @@ $$
 $$;
 
 CREATE OR REPLACE FUNCTION {{DATABASE}}.ANALYTICS.END_OF_TIME()
+COPY GRANTS
 RETURNS TIMESTAMP_NTZ
 AS
 $$
@@ -30,6 +33,7 @@ $$
 $$;
 
 CREATE OR REPLACE FUNCTION {{DATABASE}}.ANALYTICS.DATE_KEY(D DATE)
+COPY GRANTS
 RETURNS NUMBER(8,0)
 AS
 $$

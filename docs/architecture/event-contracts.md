@@ -151,14 +151,14 @@ Schema validation covers types, required fields, patterns and ranges. The rules 
 | `INV-003` | inventory | `quantity_on_hand_after >= 0` | WARN | Spark |
 | `CUS-001` | customer | `customer_id`, `loyalty_tier`, `home_store_id`, `signup_date` non-null | REJECT | Spark |
 | `CUS-002` | customer | `loyalty_tier` in known enum | WARN | Spark |
-| `PRD-001` | product | `product_id`, `product_name`, `category`, `list_price`, `unit_cost`, `is_active` non-null | REJECT | Spark |
+| `PRD-001` | product | `product_id`, `product_name`, `brand`, `category`, `subcategory`, `list_price`, `unit_cost`, `unit_of_measure`, `is_active` non-null (all are NOT NULL or version-defining in DIM_PRODUCT) | REJECT | Spark |
 | `PRD-002` | product | `list_price >= 0`, `unit_cost >= 0` | REJECT | Spark |
-| `SF-001` | RAW | Duplicate `event_id` count (transport duplicates) | INFO | Snowflake |
+| `SF-001` | RAW | Duplicate `event_id` count among rows loaded in the last 48 h (transport duplicates) | INFO | Snowflake |
 | `SF-002` | STAGING | Same `transaction_id` / `movement_id` with different `event_id` (business duplicates) | WARN | Snowflake |
 | `SF-003` | facts | Rows mapped to inferred (late-arriving) product/customer members | WARN | Snowflake |
-| `SF-004` | facts | Rows with unknown store (`store_key = -1`) | ERROR | Snowflake |
-| `SF-005` | reconciliation | Spark audit valid count = RAW row count per dataset and batch | ERROR | Snowflake |
-| `SF-006` | reconciliation | RAW distinct `event_id` = STAGING rows (+ counted business duplicates) | ERROR | Snowflake |
+| `SF-004` | facts | Rows with an Unknown (-1) store, date, product or customer key | ERROR | Snowflake |
+| `SF-005` | reconciliation | Spark audit valid count = distinct Kafka offsets in RAW, per dataset and batch (batches loaded > 30 min and < 48 h ago) | ERROR | Snowflake |
+| `SF-006` | reconciliation | Completeness between layers: every RAW business key (`transaction_id`, `movement_id`) is in STAGING, and every staged POS line is in `FACT_SALES` (rows older than the 30-min grace period, within 48 h) | ERROR | Snowflake |
 | `SF-007` | freshness | `max(event_timestamp)` in `FACT_SALES` within the freshness SLO | WARN | Snowflake |
 | `SF-008` | inventory | Σ deltas per store/product consistent with the latest `quantity_on_hand_after` | WARN | Snowflake |
 

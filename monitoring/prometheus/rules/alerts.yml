@@ -84,6 +84,15 @@ groups:
 
   - name: retail-availability
     rules:
+      - alert: RetailLoaderCrashLooping
+        # The loader only runs with the snowflake profile, so "up == 0" alone would be noise;
+        # repeated up/down flips mean the container is restarting (e.g. bad credentials).
+        expr: changes(up{job="loader"}[30m]) >= 4
+        labels: {severity: critical}
+        annotations:
+          summary: "Snowflake loader is restarting repeatedly"
+          runbook_url: "docs/runbooks/alerts.md#retailloadercrashlooping"
+
       - alert: RetailPipelineComponentDown
         expr: up{job=~"spark-ingest|spark-realtime"} == 0
         for: 2m

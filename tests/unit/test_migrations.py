@@ -102,3 +102,18 @@ def test_repository_sql_uses_only_known_placeholders() -> None:
     known = {"DATABASE", "LOADER_PUBLIC_KEY", "ADMIN_USER", "MONTHLY_CREDIT_QUOTA"}
     for path in (REPO / "snowflake").rglob("*.sql"):
         render(path.read_text(encoding="utf-8"), dict.fromkeys(known, "X"))
+
+
+def test_post_deploy_grants_rerun_after_any_change(tmp_path: Path) -> None:
+    """Replacing a procedure drops its grants, so the R__9xx grants script must re-run."""
+    conn = FakeConnection()
+    root = project(tmp_path)
+    (root / "transformations" / "R__900_grants.sql").write_text(
+        "GRANT USAGE ON SCHEMA X TO ROLE Y;"
+    )
+    runner = MigrationRunner(conn, root, {"DATABASE": "D"})
+    runner.apply()
+    (root / "transformations" / "R__views.sql").write_text("CREATE OR REPLACE VIEW V AS SELECT 3;")
+    applied = [s.path.name for s in runner.apply()]
+    assert applied == ["R__views.sql", "R__900_grants.sql"]
+    assert runner.apply() == []  # nothing changed -> nothing re-applied

@@ -32,9 +32,11 @@ COMMENT = 'Grain: one row per calendar date 2020-01-01..2030-12-31, plus -1 Unkn
 
 -- Populate once (versioned migration runs exactly once). Fixed-date national holidays only;
 -- lunar holidays (Hari Raya, Chinese New Year, Deepavali) move each year and are not modelled.
+-- Guarded so a re-run after a partial failure never duplicates rows. ROW_NUMBER, not SEQ4(),
+-- because SEQ4 is not guaranteed gap-free.
 INSERT INTO DIM_DATE
 WITH days AS (
-    SELECT DATEADD(DAY, SEQ4(), '2020-01-01'::DATE) AS d
+    SELECT DATEADD(DAY, ROW_NUMBER() OVER (ORDER BY SEQ4()) - 1, '2020-01-01'::DATE) AS d
     FROM TABLE(GENERATOR(ROWCOUNT => 4018))
 )
 SELECT
@@ -60,10 +62,12 @@ SELECT
         WHEN '12-25' THEN 'Christmas Day'
     END
 FROM days
-WHERE d <= '2030-12-31';
+WHERE d <= '2030-12-31'
+  AND NOT EXISTS (SELECT 1 FROM DIM_DATE x WHERE x.FULL_DATE = days.d);
 
-INSERT INTO DIM_DATE VALUES
-    (-1, '1900-01-01', 1, 'Unk', 1, 1, 1, 1, 'Unk', 'Unknown', 1, 1900, FALSE, FALSE, 'Unknown');
+INSERT INTO DIM_DATE
+SELECT -1, '1900-01-01'::DATE, 1, 'Unk', 1, 1, 1, 1, 'Unk', 'Unknown', 1, 1900, FALSE, FALSE, 'Unknown'
+WHERE NOT EXISTS (SELECT 1 FROM DIM_DATE WHERE DATE_KEY = -1);
 
 -- ----------------------------------------------------------------------------- DIM_STORE (SCD1)
 CREATE TABLE IF NOT EXISTS DIM_STORE (
@@ -81,9 +85,11 @@ CREATE TABLE IF NOT EXISTS DIM_STORE (
 )
 COMMENT = 'SCD Type 1: store attributes are overwritten (history restated under the current structure).';
 
-INSERT INTO DIM_STORE (STORE_KEY, STORE_ID, STORE_NAME, REGION, STORE_FORMAT) VALUES
+INSERT INTO DIM_STORE (STORE_KEY, STORE_ID, STORE_NAME, REGION, STORE_FORMAT)
+SELECT * FROM VALUES
     (-1, '-1', 'Unknown', 'Unknown', 'Unknown'),
-    (-2, '-2', 'Not applicable', 'Not applicable', 'Not applicable');
+    (-2, '-2', 'Not applicable', 'Not applicable', 'Not applicable')
+WHERE NOT EXISTS (SELECT 1 FROM DIM_STORE WHERE STORE_KEY IN (-1, -2));
 
 -- ----------------------------------------------------------------------------- DIM_PRODUCT (SCD2/1)
 CREATE TABLE IF NOT EXISTS DIM_PRODUCT (
@@ -112,9 +118,10 @@ COMMENT = 'SCD2 on brand/category/subcategory/price/cost/active; SCD1 on name/UO
 
 INSERT INTO DIM_PRODUCT (PRODUCT_KEY, PRODUCT_ID, PRODUCT_NAME, BRAND, CATEGORY, SUBCATEGORY,
                          EFFECTIVE_FROM_UTC, EFFECTIVE_TO_UTC, IS_CURRENT, IS_INFERRED, VERSION_NUMBER)
-VALUES
-    (-1, '-1', 'Unknown', 'Unknown', 'Unknown', 'Unknown', '1900-01-01', '9999-12-31', TRUE, FALSE, 1),
-    (-2, '-2', 'Not applicable', 'Not applicable', 'Not applicable', 'Not applicable', '1900-01-01', '9999-12-31', TRUE, FALSE, 1);
+SELECT * FROM VALUES
+    (-1, '-1', 'Unknown', 'Unknown', 'Unknown', 'Unknown', '1900-01-01'::TIMESTAMP_NTZ, '9999-12-31'::TIMESTAMP_NTZ, TRUE, FALSE, 1),
+    (-2, '-2', 'Not applicable', 'Not applicable', 'Not applicable', 'Not applicable', '1900-01-01'::TIMESTAMP_NTZ, '9999-12-31'::TIMESTAMP_NTZ, TRUE, FALSE, 1)
+WHERE NOT EXISTS (SELECT 1 FROM DIM_PRODUCT WHERE PRODUCT_KEY IN (-1, -2));
 
 -- ----------------------------------------------------------------------------- DIM_CUSTOMER (SCD2/1)
 CREATE TABLE IF NOT EXISTS DIM_CUSTOMER (
@@ -143,9 +150,10 @@ COMMENT = 'SCD2 on tier and location; SCD1 on consent/demographics. No direct PI
 
 INSERT INTO DIM_CUSTOMER (CUSTOMER_KEY, CUSTOMER_ID, LOYALTY_TIER, EFFECTIVE_FROM_UTC,
                           EFFECTIVE_TO_UTC, IS_CURRENT, IS_INFERRED, VERSION_NUMBER)
-VALUES
-    (-1, '-1', 'Unknown', '1900-01-01', '9999-12-31', TRUE, FALSE, 1),
-    (-2, '-2', 'Guest (no loyalty account)', '1900-01-01', '9999-12-31', TRUE, FALSE, 1);
+SELECT * FROM VALUES
+    (-1, '-1', 'Unknown', '1900-01-01'::TIMESTAMP_NTZ, '9999-12-31'::TIMESTAMP_NTZ, TRUE, FALSE, 1),
+    (-2, '-2', 'Guest (no loyalty account)', '1900-01-01'::TIMESTAMP_NTZ, '9999-12-31'::TIMESTAMP_NTZ, TRUE, FALSE, 1)
+WHERE NOT EXISTS (SELECT 1 FROM DIM_CUSTOMER WHERE CUSTOMER_KEY IN (-1, -2));
 
 -- ----------------------------------------------------------------------------- FACT_SALES
 CREATE TABLE IF NOT EXISTS FACT_SALES (

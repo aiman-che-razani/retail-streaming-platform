@@ -6,6 +6,9 @@
 #
 # Health checks gate startup order, but clients ALSO retry with backoff: `depends_on` proves a
 # dependency was healthy once, not that it stays available.
+#
+# SECURITY: every published port is bound to 127.0.0.1. Kafka (PLAINTEXT), Schema Registry and
+# Prometheus have no authentication here - they must never be reachable from the network.
 
 name: retail-platform
 
@@ -33,7 +36,7 @@ services:
     image: apache/kafka:4.3.1
     hostname: kafka
     ports:
-      - "9092:9092"          # host clients (EXTERNAL listener, advertised as localhost:9092)
+      - "127.0.0.1:9092:9092"          # host clients only (EXTERNAL listener, advertised as localhost:9092)
     environment:
       CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
       KAFKA_NODE_ID: 1
@@ -66,7 +69,7 @@ services:
     image: confluentinc/cp-schema-registry:8.2.4
     hostname: schema-registry
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
@@ -105,7 +108,7 @@ services:
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
@@ -129,7 +132,7 @@ services:
   postgres:
     image: postgres:17.11-bookworm
     ports:
-      - "${POSTGRES_HOST_PORT:-5434}:5432"   # not 5432: often taken by a local PostgreSQL install
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5434}:5432"   # not 5432: often taken by a local PostgreSQL install
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-retail_realtime}
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-retail_admin}
@@ -152,7 +155,7 @@ services:
     image: danielqsj/kafka-exporter:v1.10.0
     command: ["--kafka.server=kafka:29092", "--kafka.version=3.9.0"]
     ports:
-      - "9308:9308"
+      - "127.0.0.1:9308:9308"
     depends_on:
       kafka:
         condition: service_healthy
@@ -162,11 +165,10 @@ services:
   prometheus:
     image: prom/prometheus:v3.13.4
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=7d
-      - --web.enable-lifecycle
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
@@ -182,7 +184,7 @@ services:
   grafana:
     image: grafana/grafana:13.0.10
     ports:
-      - "${GRAFANA_HOST_PORT:-3030}:3000"
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3030}:3000"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
@@ -220,7 +222,7 @@ services:
       METRICS_PORT: 8000
     command: ["retail-simulator", "run"]
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       kafka-init:
         condition: service_completed_successfully
@@ -246,8 +248,8 @@ services:
       METRICS_PORT: 8002
     command: ["retail-spark-ingest"]
     ports:
-      - "4040:4040"
-      - "8002:8002"
+      - "127.0.0.1:4040:4040"
+      - "127.0.0.1:8002:8002"
     volumes:
       - pipeline-data:/app/data
     depends_on:
@@ -277,8 +279,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_SPARK_PASSWORD:?set POSTGRES_SPARK_PASSWORD in .env}
     command: ["retail-spark-realtime"]
     ports:
-      - "4041:4040"
-      - "8003:8003"
+      - "127.0.0.1:4041:4040"
+      - "127.0.0.1:8003:8003"
     volumes:
       - pipeline-data:/app/data
     depends_on:
@@ -306,7 +308,7 @@ services:
       SNOWFLAKE_PRIVATE_KEY_PATH: ${SNOWFLAKE_PRIVATE_KEY_PATH_CONTAINER:-}
     command: ["retail-loader", "run"]
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     volumes:
       - pipeline-data:/app/data
       - ./secrets:/app/secrets:ro

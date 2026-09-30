@@ -49,7 +49,32 @@ def services() -> PostgresSettings:
         pytest.skip("pipeline not running - `make up-pipeline`")
     if not _reachable("localhost", 8003):
         pytest.skip("spark-realtime not running - `make up-pipeline`")
+    _wait_for_realtime_to_catch_up()
     return settings
+
+
+def _wait_for_realtime_to_catch_up(max_lag: float = 2000, timeout_s: float = 300) -> None:
+    """Right after (re)start the realtime app replays a backlog (e.g. the simulator's master-data
+    bootstrap). Measure its own consumer lag from /metrics and wait, so timings below are fair."""
+    import re
+    import urllib.request
+
+    deadline = time.monotonic() + timeout_s
+    lag = float("inf")
+    while time.monotonic() < deadline:
+        with urllib.request.urlopen("http://127.0.0.1:8003/metrics", timeout=5) as response:
+            text = response.read().decode()
+        values = [
+            float(v)
+            for v in re.findall(
+                r'retail_spark_kafka_offsets_behind_latest\{[^}]*stat="max"[^}]*\} (\S+)', text
+            )
+        ]
+        lag = max(values) if values else float("inf")
+        if lag <= max_lag:
+            return
+        time.sleep(5)
+    pytest.fail(f"spark-realtime still {lag} offsets behind after {timeout_s}s")
 
 
 def _event(sku: str, minutes_ago: float = 0, event_id: str | None = None) -> dict[str, Any]:

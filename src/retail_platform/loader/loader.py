@@ -82,7 +82,7 @@ class LoaderMetrics:
         )
         self.last_success = Gauge(
             "retail_loader_last_success_timestamp_seconds",
-            "Unix time of the last successful load per dataset",
+            "Unix time the dataset was last fully loaded (idle cycles count: nothing waiting)",
             ["dataset"],
             registry=registry,
         )
@@ -137,6 +137,7 @@ class SnowflakeLoader:
         report = CycleReport(batches=len(batches))
         if not batches and not reference_due:
             report.skipped_warehouse = True  # no connection -> no warehouse resume -> no cost
+            self._mark_fresh(LOAD_ORDER)  # nothing waiting = up to date (no false stale alert)
             log.info("load_cycle_idle")
             return report
 
@@ -148,10 +149,18 @@ class SnowflakeLoader:
                 if reference_due:
                     self._load_reference(cursor)
                     self._loaded_reference_checksum = reference_checksum
-                self._put(cursor, batches)
                 for dataset in LOAD_ORDER:
-                    if any(b.dataset == dataset for b in batches):
-                        self._copy(cursor, dataset, report)
+                    dataset_batches = [b for b in batches if b.dataset == dataset]
+                    if not dataset_batches:
+                        continue
+                    self._put(cursor, dataset_batches)
+                    self._copy(cursor, dataset, report)
+                    # Archive as soon as THIS dataset is loaded: if a later dataset fails, these
+                    # files are never re-uploaded (a re-upload could get a new checksum and be
+                    # loaded twice into RAW).
+                    for batch in dataset_batches:
+                        archive(batch, s.landing_dir, s.archive_dir)
+                    self._mark_fresh([dataset])
             except self._driver_error as exc:
                 raise self._classify(exc, "load cycle") from exc
             finally:
@@ -159,8 +168,7 @@ class SnowflakeLoader:
         finally:
             connection.close()
 
-        for batch in batches:  # only after every COPY succeeded
-            archive(batch, s.landing_dir, s.archive_dir)
+        self._mark_fresh([d for d in LOAD_ORDER if not any(b.dataset == d for b in batches)])
         purge_archive(s.archive_dir, s.archive_retention_days)
         self._metrics.cycle_duration.observe(time.monotonic() - started)
         log.info(
@@ -172,6 +180,12 @@ class SnowflakeLoader:
             status="ok",
         )
         return report
+
+    def _mark_fresh(self, datasets: list[str]) -> None:
+        """Dataset has nothing left to load as of now (loaded, or nothing was waiting)."""
+        now = time.time()
+        for dataset in datasets:
+            self._metrics.last_success.labels(dataset).set(now)
 
     # ------------------------------------------------------------------ steps
     def _put(self, cursor: Cursor, batches: list[LandingBatch]) -> None:
@@ -206,7 +220,6 @@ class SnowflakeLoader:
             report.files_loaded += 1
         report.rows_loaded[dataset] = report.rows_loaded.get(dataset, 0) + loaded_rows
         self._metrics.rows.labels(dataset).inc(loaded_rows)
-        self._metrics.last_success.labels(dataset).set(time.time())
 
     def _load_reference(self, cursor: Cursor) -> None:
         cursor.execute(

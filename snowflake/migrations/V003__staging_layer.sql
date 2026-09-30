@@ -1,6 +1,6 @@
 -- =============================================================================
 -- V003 STAGING layer (data-model.md §3): typed, flattened, deduplicated.
--- Populated by STAGING.SP_STAGE_* procedures (snowflake/transformations/R__100_staging.sql).
+-- Populated by STAGING.SP_STAGE_* procedures (snowflake/transformations/R__200_staging_procedures.sql).
 -- =============================================================================
 
 USE SCHEMA {{DATABASE}}.STAGING;
