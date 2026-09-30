@@ -1,7 +1,7 @@
 # Spark image: Python 3.12 + PySpark 4.2 + JRE 21, running Spark in local mode (ADR-004).
 # Connector jars are resolved at BUILD time and copied into pyspark/jars so containers never
 # download dependencies at runtime (reproducible, works offline).
-FROM eclipse-temurin:21-jre-noble AS jre
+FROM eclipse-temurin:24-jre-noble AS jre
 
 FROM python:3.12-slim-bookworm AS runtime
 
