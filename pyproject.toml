@@ -76,6 +76,8 @@ ignore = [
 "src/retail_platform/cli/*" = ["PLC0415"]
 # snowflake-connector / cryptography are optional extras (not in the Spark image): import lazily.
 "src/retail_platform/warehouse/connection.py" = ["PLC0415"]
+# Dev tooling: long PromQL/SQL literals and many-argument panel builders read best inline.
+"scripts/*" = ["E501", "PLR0917", "N806"]
 
 # ------------------------------------------------------------------ mypy
 [tool.mypy]

@@ -117,7 +117,7 @@ def dashboard(uid: str, title: str, panels: list[dict[str, Any]], refresh: str =
 
 
 def pipeline_overview() -> dict[str, Any]:
-    L = Layout()  # noqa: N806
+    L = Layout()
     rejected = 'sum(rate(retail_spark_records_total{outcome="rejected"}[5m]))'
     read = "sum(rate(retail_spark_input_rows_total[5m]))"
     panels = [
@@ -168,7 +168,7 @@ def pipeline_overview() -> dict[str, Any]:
 
 
 def realtime_sales() -> dict[str, Any]:
-    L = Layout()  # noqa: N806
+    L = Layout()
     panels = [
         row(L, "Real-time sales (Spark realtime app -> PostgreSQL; late data > 10 min excluded)"),
         timeseries(

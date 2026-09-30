@@ -1,0 +1,159 @@
+# Quality gates. Nothing here deploys anything (CI only).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_PYTHON: "3.12"
+  FORCE_COLOR: "1"
+
+jobs:
+  # --------------------------------------------------------------------------- static checks
+  lint-and-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - name: Install (locked)
+        run: uv sync --locked --extra snowflake --extra spark
+      - name: ruff lint
+        run: uv run ruff check src tests scripts
+      - name: ruff format
+        run: uv run ruff format --check src tests scripts
+      - name: mypy --strict
+        run: uv run mypy
+      - name: Compose file is valid
+        run: cp .env.example .env && docker compose --profile pipeline --profile snowflake config -q
+
+  # --------------------------------------------------------------------------- fast tests
+  unit-and-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra snowflake --extra spark
+      - name: Unit + contract tests (incl. static Snowflake SQL checks)
+        run: uv run pytest -m "unit or contract" --cov --cov-report=xml --cov-report=term
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-unit
+          path: coverage.xml
+
+  spark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra spark
+      - name: Spark transformation / streaming tests (local mode)
+        run: uv run pytest -m "spark and not integration"
+
+  # --------------------------------------------------------------------------- services
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [unit-and-contract]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # base-branch schemas for the compatibility gate
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra snowflake --extra spark
+      - name: Configure throwaway credentials
+        run: |
+          cp .env.example .env
+          for key in POSTGRES_ADMIN_PASSWORD POSTGRES_SPARK_PASSWORD POSTGRES_GRAFANA_PASSWORD GRAFANA_ADMIN_PASSWORD; do
+            value=$(openssl rand -hex 16)
+            sed -i "s|^${key}=.*|${key}=${value}|" .env
+            if [ "$key" = "POSTGRES_SPARK_PASSWORD" ]; then sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${value}|" .env; fi
+          done
+      - name: Start Kafka, Schema Registry and PostgreSQL
+        run: docker compose up -d --wait kafka schema-registry postgres
+
+      - name: Schema compatibility gate (PR schemas vs base-branch schemas)
+        if: github.event_name == 'pull_request'
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          mkdir -p /tmp/base/config /tmp/base/schemas
+          git show "$base:kafka/config/topics.yaml" > /tmp/base/config/topics.yaml
+          for f in $(git ls-tree --name-only "$base" kafka/schemas/ | grep '\.schema\.json$'); do
+            git show "$base:$f" > "/tmp/base/schemas/$(basename "$f")"
+          done
+          KAFKA_CONFIG_DIR=/tmp/base uv run retail-schemas register   # what production has
+          uv run retail-schemas check                                  # would this PR break it?
+
+      - name: Provision topics and register schemas
+        run: docker compose run --rm kafka-init
+      - name: Python <-> Kafka integration tests
+        run: uv run pytest -m "integration and not spark"
+      - name: Kafka -> Spark -> landing/DLQ/PostgreSQL integration tests
+        run: |
+          docker build -f docker/spark/Dockerfile --target test -t retail-platform/spark-test:ci .
+          docker run --rm --network retail-platform_default --env-file .env \
+            -e KAFKA_BOOTSTRAP_SERVERS=kafka:29092 -e POSTGRES_HOST=postgres -e POSTGRES_PORT=5432 \
+            retail-platform/spark-test:ci pytest -m "spark and integration"
+      - name: Service logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # --------------------------------------------------------------------------- supply chain
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10
+      - name: Dependency vulnerability audit (locked versions)
+        run: |
+          uv export --locked --no-hashes --format requirements-txt --extra snowflake --extra spark --no-emit-project > requirements.txt
+          uvx pip-audit --strict --requirement requirements.txt
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Build application image
+        run: docker build -f docker/app/Dockerfile -t retail-platform/app:ci .
+      - name: Build Spark image
+        run: docker build -f docker/spark/Dockerfile --target runtime -t retail-platform/spark:ci .
+      - name: Images run as non-root
+        run: |
+          test "$(docker run --rm --entrypoint id retail-platform/app:ci -u)" = "10001"
+          test "$(docker run --rm --entrypoint id retail-platform/spark:ci -u)" = "10001"

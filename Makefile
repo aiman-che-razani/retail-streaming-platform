@@ -88,11 +88,11 @@ dlq: ## Summarise DLQ contents (make dlq t=pos.transactions)
 	$(UV) run retail-dlq inspect --topic $(or $(t),pos.transactions)
 
 lint: ## ruff lint + format check
-	$(UV) run ruff check src tests
-	$(UV) run ruff format --check src tests
+	$(UV) run ruff check src tests scripts
+	$(UV) run ruff format --check src tests scripts
 
 format: ## Auto-format code
-	$(UV) run ruff format src tests
+	$(UV) run ruff format src tests scripts
 	$(UV) run ruff check --fix src tests
 
 typecheck: ## mypy --strict
