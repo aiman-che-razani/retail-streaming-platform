@@ -3,7 +3,7 @@
 # download dependencies at runtime (reproducible, works offline).
 FROM eclipse-temurin:21-jre-noble AS jre
 
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.14-slim-bookworm AS runtime
 
 ARG SPARK_PACKAGES="org.apache.spark:spark-sql-kafka-0-10_2.13:4.2.0,org.postgresql:postgresql:42.7.13"
 
