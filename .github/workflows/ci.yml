@@ -140,7 +140,9 @@ jobs:
         run: |
           # Hashed, fully pinned export of uv.lock: audit exactly what is locked, with no
           # dependency re-resolution (fast, deterministic) and hash integrity checks.
-          uv export --locked --format requirements-txt --extra snowflake --extra spark --no-emit-project > requirements.txt
+          # -o, not '>': with FORCE_COLOR set, uv colourises stdout even when redirected, which
+          # writes ANSI codes into the requirements file.
+          uv export --locked --format requirements-txt --extra snowflake --extra spark --no-emit-project -o requirements.txt
           set +e
           out=$(uvx pip-audit --strict --require-hashes --disable-pip --requirement requirements.txt 2>&1)
           code=$?

@@ -117,7 +117,7 @@ test-e2e: ## End-to-end tests (needs `make up-pipeline`)
 	$(UV) run pytest -m e2e
 
 audit: ## Dependency vulnerability audit
-	$(UV) export --locked --format requirements-txt --extra snowflake --extra spark --no-emit-project > .audit-requirements.txt
+	$(UV) export --locked --format requirements-txt --extra snowflake --extra spark --no-emit-project -o .audit-requirements.txt
 	$(UV) run pip-audit --strict --require-hashes --disable-pip -r .audit-requirements.txt
 	@rm -f .audit-requirements.txt
 
