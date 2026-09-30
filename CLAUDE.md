@@ -25,7 +25,8 @@ Real-time retail data platform: **Simulator → Kafka → Spark Structured Strea
 - `spark/config/` Spark and log4j config · `docker/` Dockerfiles
 - `snowflake/ddl/` account bootstrap (ACCOUNTADMIN, run once) · `snowflake/migrations/` versioned `V###__*.sql` · `snowflake/transformations/` repeatable `R__*.sql` (procedures, views, tasks) · `snowflake/analytics/` business queries · `snowflake/quality/` DQ SQL
 - `postgres/init/` real-time serving schema · `monitoring/` Prometheus + Grafana provisioning
-- `tests/unit` (no external deps) · `tests/integration` (Docker services) · `tests/e2e` · `tests/contract` (schemas vs code)
+- `tests/unit` (no external deps) · `tests/contract` (schemas/SQL vs code) · `tests/spark` (JVM) · `tests/integration` (Docker services) · `tests/e2e` (running pipeline)
+- `snowflake/transformations/R__9xx_*` are post-deploy scripts (grants): re-applied after any other script. Every `CREATE OR REPLACE` procedure/function/view needs `COPY GRANTS` (contract-tested).
 
 ## Engineering rules
 
@@ -41,7 +42,7 @@ Real-time retail data platform: **Simulator → Kafka → Spark Structured Strea
 
 ## Commands (see Makefile)
 
-`make up` · `make down` · `make topics` · `make schemas` · `make simulate` · `make spark-ingest` · `make spark-realtime` · `make load` · `make test-unit` · `make test-integration` · `make lint` · `make typecheck`
+`make up` · `make up-pipeline` · `make down` · `make topics` · `make schemas` · `make simulate` · `make simulate-faults` · `make spark-ingest` · `make spark-realtime` · `make load` · `make snowflake-migrate` · `make reconcile` · `make dlq t=<topic>` · `make test-unit` · `make test-spark` · `make test-integration` · `make test-spark-integration` · `make test-e2e` · `make lint` · `make typecheck` · `make check` (run `make help` for all)
 
 ## Agents
 
