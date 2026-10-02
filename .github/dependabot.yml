@@ -1,25 +1,58 @@
+# Dependency update policy.
+# - One grouped PR per ecosystem per month (not one PR per dependency).
+# - Major versions are NOT proposed automatically: they need a deliberate upgrade
+#   (e.g. PostgreSQL 17 -> 18 needs a data migration; a new JDK must be supported by Spark).
+# - The Python runtime stays on 3.12.x, matching pyproject.toml (requires-python < 3.14) and
+#   uv.lock; moving to a newer Python is a planned change, not an automatic bump.
+# - The JRE in the Spark image stays on 21 (an LTS release supported by Spark 4.x).
 version: 2
 updates:
   - package-ecosystem: uv
     directory: "/"
     schedule:
-      interval: weekly
+      interval: monthly
+    open-pull-requests-limit: 2
     groups:
-      python-minor:
+      python-dependencies:
+        patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: docker
-    directory: "/docker/app"
+    directories: ["/docker/app", "/docker/spark"]
     schedule:
       interval: monthly
-  - package-ecosystem: docker
-    directory: "/docker/spark"
-    schedule:
-      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      base-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "python"
+        versions: [">= 3.13"]
+      - dependency-name: "eclipse-temurin"
+        versions: [">= 22"]
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: docker-compose
     directory: "/"
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      compose-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      actions:
+        patterns: ["*"]

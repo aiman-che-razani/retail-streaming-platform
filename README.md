@@ -99,7 +99,7 @@ The full design, with requirements, boundaries and the deployment view, is in [d
 | Concern | Choice |
 |---|---|
 | Language | Python 3.12 (typed, `mypy --strict`), SQL |
-| Streaming backbone | Apache Kafka 4.3 (KRaft), Confluent Schema Registry 8.2, kafbat UI |
+| Streaming backbone | Apache Kafka 4.3 (KRaft), Confluent Schema Registry 8.3, kafbat UI |
 | Contracts | JSON Schema draft-07, `BACKWARD_TRANSITIVE` |
 | Stream processing | PySpark 4.2 Structured Streaming, RocksDB state store, JDK 21 |
 | Warehouse | Snowflake (Streams, Tasks, Snowflake Scripting procedures, internal stage, COPY) |

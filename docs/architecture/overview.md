@@ -198,7 +198,7 @@ data/archive/<same layout>                loaded batches (deleted after LANDING_
 | Service | Image | Host port | Health check | Depends on (healthy) | Memory limit |
 |---|---|---|---|---|---|
 | `kafka` | `apache/kafka:4.3.1` | 9092 | broker API versions | — | 1 GB |
-| `schema-registry` | `confluentinc/cp-schema-registry:8.2.4` | 8081 | `GET /subjects` | kafka | 512 MB |
+| `schema-registry` | `confluentinc/cp-schema-registry:8.3.2` | 8081 | `GET /subjects` | kafka | 512 MB |
 | `kafka-init` | project Python image | — | one-shot (exit 0) | kafka, schema-registry | 256 MB |
 | `kafka-ui` | `ghcr.io/kafbat/kafka-ui:v1.5.0` | 8080 | `/actuator/health` | kafka, schema-registry | 512 MB |
 | `postgres` | `postgres:17.11` | 5434 (`POSTGRES_HOST_PORT`; 5432/5433 are often taken) | `pg_isready` | — | 256 MB |
@@ -207,8 +207,8 @@ data/archive/<same layout>                loaded batches (deleted after LANDING_
 | `spark-realtime` | project Spark image | 4041 (UI), 8003 (metrics) | UI reachable | kafka-init completed, postgres | 2 GB |
 | `loader` | project Python image | 8001 (metrics) | `/metrics` | — (Snowflake is external; retries with backoff) | 256 MB |
 | `kafka-exporter` | `danielqsj/kafka-exporter:v1.10.0` | 9308 | `/metrics` | kafka | 128 MB |
-| `prometheus` | `prom/prometheus:v3.13.4` | 9090 | `/-/ready` | — | 256 MB |
-| `grafana` | `grafana/grafana:13.0.10` | 3030 (`GRAFANA_HOST_PORT`) | `/api/health` | prometheus, postgres | 256 MB |
+| `prometheus` | `prom/prometheus:v3.15.0` | 9090 | `/-/ready` | — | 256 MB |
+| `grafana` | `grafana/grafana:13.2.2` | 3030 (`GRAFANA_HOST_PORT`) | `/api/health` | prometheus, postgres | 256 MB |
 
 Compose profiles keep the default footprint small: `core` (Kafka, registry, init, UI, Postgres, monitoring), `pipeline` (simulator, Spark apps), `snowflake` (loader, only when Snowflake credentials are configured).
 
