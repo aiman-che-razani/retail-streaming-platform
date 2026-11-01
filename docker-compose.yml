@@ -66,7 +66,7 @@ services:
     restart: unless-stopped
 
   schema-registry:
-    image: confluentinc/cp-schema-registry:8.3.2
+    image: confluentinc/cp-schema-registry:8.4.0
     hostname: schema-registry
     ports:
       - "127.0.0.1:8081:8081"
@@ -153,7 +153,7 @@ services:
 
   # ------------------------------------------------------------------ Monitoring
   kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.10.0
+    image: danielqsj/kafka-exporter:v1.11.0
     command: ["--kafka.server=kafka:29092", "--kafka.version=3.9.0"]
     ports:
       - "127.0.0.1:9308:9308"
@@ -164,7 +164,7 @@ services:
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     ports:
       - "127.0.0.1:9090:9090"
     command:
@@ -183,7 +183,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:13.2.2
+    image: grafana/grafana:13.3.0
     ports:
       - "127.0.0.1:${GRAFANA_HOST_PORT:-3030}:3000"
     environment:
