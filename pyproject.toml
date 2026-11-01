@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-spark = ["pyspark==4.2.0"]
+spark = ["pyspark==4.2.1"]
 snowflake = ["snowflake-connector-python>=4.7,<5", "cryptography>=45"]
 
 [dependency-groups]
